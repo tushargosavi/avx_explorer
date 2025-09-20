@@ -210,38 +210,65 @@ fn parse_array(input: &str) -> Result<Argument, String> {
 }
 
 fn parse_number(input: &str) -> Result<Argument, String> {
-    if input.starts_with("0x") {
-        let cleaned = input[2..].replace('_', "");
+    // Allow optional unsigned integer suffix: u8/u16/u32/u64
+    let (num_part, suffix) = if let Some(pos) = input.rfind(|c: char| c == 'u') {
+        (&input[..pos], Some(&input[pos..]))
+    } else {
+        (input, None)
+    };
+    let typed = match suffix {
+        Some("u8") => Some(ArgType::U8),
+        Some("u16") => Some(ArgType::U16),
+        Some("u32") => Some(ArgType::U32),
+        Some("u64") => Some(ArgType::U64),
+        Some(_) => return Err(format!("Invalid numeric suffix: {}", suffix.unwrap())),
+        None => None,
+    };
+
+    if num_part.starts_with("0x") {
+        let cleaned = num_part[2..].replace('_', "");
         if cleaned.is_empty() {
             return Err("Empty hex number".to_string());
         }
-        u64::from_str_radix(&cleaned, 16)
-            .map(Argument::Scalar)
-            .map_err(|_| format!("Invalid hex number: {}", input))
-    } else if input.starts_with("0o") {
-        let cleaned = input[2..].replace('_', "");
+        let val = u64::from_str_radix(&cleaned, 16)
+            .map_err(|_| format!("Invalid hex number: {}", input))?;
+        Ok(match typed {
+            Some(t) => Argument::ScalarTyped(t, val),
+            None => Argument::Scalar(val),
+        })
+    } else if num_part.starts_with("0o") {
+        let cleaned = num_part[2..].replace('_', "");
         if cleaned.is_empty() {
             return Err("Empty octal number".to_string());
         }
-        u64::from_str_radix(&cleaned, 8)
-            .map(Argument::Scalar)
-            .map_err(|_| format!("Invalid octal number: {}", input))
-    } else if input.starts_with("0b") {
-        let cleaned = input[2..].replace('_', "");
+        let val = u64::from_str_radix(&cleaned, 8)
+            .map_err(|_| format!("Invalid octal number: {}", input))?;
+        Ok(match typed {
+            Some(t) => Argument::ScalarTyped(t, val),
+            None => Argument::Scalar(val),
+        })
+    } else if num_part.starts_with("0b") {
+        let cleaned = num_part[2..].replace('_', "");
         if cleaned.is_empty() {
             return Err("Empty binary number".to_string());
         }
-        u64::from_str_radix(&cleaned, 2)
-            .map(Argument::Scalar)
-            .map_err(|_| format!("Invalid binary number: {}", input))
+        let val = u64::from_str_radix(&cleaned, 2)
+            .map_err(|_| format!("Invalid binary number: {}", input))?;
+        Ok(match typed {
+            Some(t) => Argument::ScalarTyped(t, val),
+            None => Argument::Scalar(val),
+        })
     } else {
-        let cleaned = input.replace('_', "");
+        let cleaned = num_part.replace('_', "");
         if cleaned.is_empty() {
             return Err("Empty decimal number".to_string());
         }
-        cleaned
+        let val = cleaned
             .parse::<u64>()
-            .map(Argument::Scalar)
-            .map_err(|_| format!("Invalid decimal number: {}", input))
+            .map_err(|_| format!("Invalid decimal number: {}", input))?;
+        Ok(match typed {
+            Some(t) => Argument::ScalarTyped(t, val),
+            None => Argument::Scalar(val),
+        })
     }
 }

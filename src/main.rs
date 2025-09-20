@@ -1,9 +1,9 @@
 mod ast;
+mod avx2;
+mod bmi2;
 mod display;
 mod interpreter;
 mod parser;
-mod avx2;
-mod bmi2;
 use parser::parse_input;
 
 use crate::interpreter::Interpreter;

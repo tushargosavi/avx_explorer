@@ -1,2 +1,2 @@
 _mm256_mask_expand_epi64(qw[2,2,2,2],0x5, qw[0x1, 0x2, 0x3, 0x4])
-print_hex(_res, 64)
+print_hex(_res, 1)

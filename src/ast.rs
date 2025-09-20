@@ -124,6 +124,7 @@ pub enum Argument {
     Array(ArgType, [u8; 64]),
     Memory(Vec<u8>),
     Scalar(u64),
+    ScalarTyped(ArgType, u64),
     Variable(String),
 }
 
@@ -160,6 +161,11 @@ impl Argument {
                 }
             },
             Argument::Scalar(val) => {
+                let mut result = [0i32; 8];
+                result[0] = *val as i32;
+                unsafe { std::mem::transmute(result) }
+            }
+            Argument::ScalarTyped(_, val) => {
                 let mut result = [0i32; 8];
                 result[0] = *val as i32;
                 unsafe { std::mem::transmute(result) }
@@ -201,6 +207,11 @@ impl Argument {
                 result[0] = *val as i64;
                 unsafe { std::mem::transmute(result) }
             }
+            Argument::ScalarTyped(_, val) => {
+                let mut result = [0i64; 8];
+                result[0] = *val as i64;
+                unsafe { std::mem::transmute(result) }
+            }
             _ => unsafe { std::mem::transmute([0i64; 8]) },
         }
     }
@@ -208,6 +219,7 @@ impl Argument {
     pub fn to_u64(&self) -> u64 {
         match self {
             Argument::Scalar(val) => *val,
+            Argument::ScalarTyped(_, val) => *val,
             Argument::Array(_, bytes) => {
                 if bytes.len() >= 8 {
                     u64::from_le_bytes([
@@ -227,6 +239,7 @@ impl Argument {
     pub fn to_u32(&self) -> u32 {
         match self {
             Argument::Scalar(val) => *val as u32,
+            Argument::ScalarTyped(_, val) => *val as u32,
             Argument::Array(_, bytes) => {
                 if bytes.len() >= 4 {
                     u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
@@ -243,6 +256,7 @@ impl Argument {
     pub fn to_u16(&self) -> u16 {
         match self {
             Argument::Scalar(val) => *val as u16,
+            Argument::ScalarTyped(_, val) => *val as u16,
             Argument::Array(_, bytes) => {
                 if bytes.len() >= 2 {
                     u16::from_le_bytes([bytes[0], bytes[1]])
@@ -259,6 +273,7 @@ impl Argument {
     pub fn to_u8(&self) -> u8 {
         match self {
             Argument::Scalar(val) => *val as u8,
+            Argument::ScalarTyped(_, val) => *val as u8,
             Argument::Array(_, bytes) => bytes.first().copied().unwrap_or(0),
             _ => 0,
         }

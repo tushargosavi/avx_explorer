@@ -243,6 +243,7 @@ fn m256i_to_argument(value: __m256i) -> Argument {
 fn display_argument_simple(arg: &Argument) {
     match arg {
         Argument::Scalar(val) => println!("{}", val),
+        Argument::ScalarTyped(_, val) => println!("{}", val),
         Argument::Array(arg_type, bytes) => match arg_type {
             ArgType::U8 => {
                 let values_str: Vec<String> =
@@ -368,16 +369,110 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
                 let bytes = v.to_le_bytes();
                 let mut out = String::new();
                 for (i, b) in bytes.iter().enumerate() {
-                    if i > 0 { out.push('_'); }
+                    if i > 0 {
+                        out.push('_');
+                    }
                     out.push_str(&format!("{:08b}", b));
                 }
                 println!("{}", out);
             } else {
+                let bytes = v.to_le_bytes();
                 match chunk_bits {
-                    8 => println!("0x{:02x}", (v & 0xFF) as u8),
-                    16 => println!("0x{:04x}", (v & 0xFFFF) as u16),
-                    32 => println!("0x{:08x}", (v & 0xFFFF_FFFF) as u32),
-                    64 => println!("0x{:016x}", *v as u64),
+                    8 => {
+                        let mut out = String::new();
+                        for b in bytes.iter() {
+                            out.push_str(&format!("0x{:02x} ", b));
+                        }
+                        println!("{}", out.trim_end());
+                    }
+                    16 => {
+                        for i in (0..8).step_by(2) {
+                            let vv = u16::from_le_bytes([bytes[i], bytes[i + 1]]);
+                            print!("0x{:04x} ", vv);
+                        }
+                        println!("");
+                    }
+                    32 => {
+                        for i in (0..8).step_by(4) {
+                            let vv = u32::from_le_bytes([
+                                bytes[i],
+                                bytes[i + 1],
+                                bytes[i + 2],
+                                bytes[i + 3],
+                            ]);
+                            print!("0x{:08x} ", vv);
+                        }
+                        println!("");
+                    }
+                    64 => {
+                        println!("0x{:016x}", *v as u64);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+        }
+        Argument::ScalarTyped(t, v) => {
+            let type_bytes = t.byte_size();
+            if chunk_bits == 1 {
+                let mut bytes = v.to_le_bytes();
+                // Zero out bytes beyond the declared type width for clarity
+                for i in type_bytes..8 {
+                    bytes[i] = 0;
+                }
+                let mut out = String::new();
+                for (i, b) in bytes.iter().enumerate() {
+                    if i > 0 {
+                        out.push('_');
+                    }
+                    out.push_str(&format!("{:08b}", b));
+                }
+                println!("{}", out);
+            } else {
+                let bytes = v.to_le_bytes();
+                match chunk_bits {
+                    8 => {
+                        let mut out = String::new();
+                        for i in 0..type_bytes {
+                            out.push_str(&format!("0x{:02x} ", bytes[i]));
+                        }
+                        println!("{}", out.trim_end());
+                    }
+                    16 => {
+                        let total = (type_bytes + 1) / 2;
+                        for n in 0..total {
+                            let i = n * 2;
+                            let vv = u16::from_le_bytes([
+                                bytes.get(i).copied().unwrap_or(0),
+                                bytes.get(i + 1).copied().unwrap_or(0),
+                            ]);
+                            print!("0x{:04x} ", vv);
+                        }
+                        println!("");
+                    }
+                    32 => {
+                        let total = (type_bytes + 3) / 4;
+                        for n in 0..total {
+                            let i = n * 4;
+                            let vv = u32::from_le_bytes([
+                                bytes.get(i).copied().unwrap_or(0),
+                                bytes.get(i + 1).copied().unwrap_or(0),
+                                bytes.get(i + 2).copied().unwrap_or(0),
+                                bytes.get(i + 3).copied().unwrap_or(0),
+                            ]);
+                            print!("0x{:08x} ", vv);
+                        }
+                        println!("");
+                    }
+                    64 => {
+                        let vv = if type_bytes >= 8 {
+                            *v as u64
+                        } else {
+                            let mut tmp = [0u8; 8];
+                            tmp[..type_bytes].copy_from_slice(&bytes[..type_bytes]);
+                            u64::from_le_bytes(tmp)
+                        };
+                        println!("0x{:016x}", vv);
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -388,7 +483,9 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
             if chunk_bits == 1 {
                 let mut out = String::new();
                 for (i, b) in data.iter().enumerate() {
-                    if i > 0 { out.push('_'); }
+                    if i > 0 {
+                        out.push('_');
+                    }
                     out.push_str(&format!("{:08b}", b));
                 }
                 println!("{}", out);
@@ -445,7 +542,9 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
             if chunk_bits == 1 {
                 let mut out = String::new();
                 for (i, b) in bytes.iter().enumerate() {
-                    if i > 0 { out.push('_'); }
+                    if i > 0 {
+                        out.push('_');
+                    }
                     out.push_str(&format!("{:08b}", b));
                 }
                 println!("{}", out);
@@ -463,6 +562,9 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
 fn print_dec(arg: &Argument) -> Result<(), String> {
     match arg {
         Argument::Scalar(v) => {
+            println!("{}", v);
+        }
+        Argument::ScalarTyped(_, v) => {
             println!("{}", v);
         }
         Argument::Array(arg_type, bytes) => {
@@ -536,6 +638,9 @@ fn print_dec(arg: &Argument) -> Result<(), String> {
 fn print_bin(arg: &Argument) -> Result<(), String> {
     match arg {
         Argument::Scalar(v) => {
+            println!("{:064b}", v);
+        }
+        Argument::ScalarTyped(_, v) => {
             println!("{:064b}", v);
         }
         Argument::Array(arg_type, bytes) => {

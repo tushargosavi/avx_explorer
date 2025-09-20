@@ -24,7 +24,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
             let src = args[0].to_u32();
             let mask = args[1].to_u32();
             let res = unsafe { _pdep_u32(src, mask) } as u64;
-            Ok(Argument::Scalar(res))
+            Ok(Argument::ScalarTyped(ArgType::U32, res))
         },
     ));
 
@@ -41,9 +41,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
             let src = args[0].to_u64();
             let mask = args[1].to_u64();
             let res = unsafe { _pdep_u64(src, mask) };
-            Ok(Argument::Scalar(res))
+            Ok(Argument::ScalarTyped(ArgType::U64, res))
         },
     ));
 }
-
-
