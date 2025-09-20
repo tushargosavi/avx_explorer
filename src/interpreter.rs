@@ -359,68 +359,102 @@ fn valid_len_for_array(arg_type: &ArgType) -> usize {
 
 fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> {
     let chunk_bits = chunk_bits_opt.unwrap_or(32);
-    if !matches!(chunk_bits, 8 | 16 | 32 | 64) {
-        return Err("chunk_bits must be one of 8, 16, 32, 64".to_string());
+    if !(chunk_bits == 1 || matches!(chunk_bits, 8 | 16 | 32 | 64)) {
+        return Err("chunk_bits must be 1 (bitstring) or one of 8, 16, 32, 64".to_string());
     }
     match arg {
         Argument::Scalar(v) => {
-            println!("0x{:016x}", v);
+            if chunk_bits == 1 {
+                let bytes = v.to_le_bytes();
+                let mut out = String::new();
+                for (i, b) in bytes.iter().enumerate() {
+                    if i > 0 { out.push('_'); }
+                    out.push_str(&format!("{:08b}", b));
+                }
+                println!("{}", out);
+            } else {
+                match chunk_bits {
+                    8 => println!("0x{:02x}", (v & 0xFF) as u8),
+                    16 => println!("0x{:04x}", (v & 0xFFFF) as u16),
+                    32 => println!("0x{:08x}", (v & 0xFFFF_FFFF) as u32),
+                    64 => println!("0x{:016x}", *v as u64),
+                    _ => unreachable!(),
+                }
+            }
         }
         Argument::Array(arg_type, bytes) => {
             let valid = valid_len_for_array(arg_type);
             let data = &bytes[..valid.min(bytes.len())];
-            match chunk_bits {
-                8 => {
-                    let mut out = String::new();
-                    for b in data.iter() {
-                        out.push_str(&format!("0x{:02x} ", b));
-                    }
-                    println!("{}", out.trim_end());
+            if chunk_bits == 1 {
+                let mut out = String::new();
+                for (i, b) in data.iter().enumerate() {
+                    if i > 0 { out.push('_'); }
+                    out.push_str(&format!("{:08b}", b));
                 }
-                16 => {
-                    for chunk in data.chunks_exact(2) {
-                        let v = u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]);
-                        print!("0x{:04x} ", v);
+                println!("{}", out);
+            } else {
+                match chunk_bits {
+                    8 => {
+                        let mut out = String::new();
+                        for b in data.iter() {
+                            out.push_str(&format!("0x{:02x} ", b));
+                        }
+                        println!("{}", out.trim_end());
                     }
-                    println!("");
-                }
-                32 => {
-                    for chunk in data.chunks_exact(4) {
-                        let v = u32::from_le_bytes([
-                            chunk[0],
-                            *chunk.get(1).unwrap_or(&0),
-                            *chunk.get(2).unwrap_or(&0),
-                            *chunk.get(3).unwrap_or(&0),
-                        ]);
-                        print!("0x{:08x} ", v);
+                    16 => {
+                        for chunk in data.chunks_exact(2) {
+                            let v = u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]);
+                            print!("0x{:04x} ", v);
+                        }
+                        println!("");
                     }
-                    println!("");
-                }
-                64 => {
-                    for chunk in data.chunks_exact(8) {
-                        let v = u64::from_le_bytes([
-                            chunk[0],
-                            *chunk.get(1).unwrap_or(&0),
-                            *chunk.get(2).unwrap_or(&0),
-                            *chunk.get(3).unwrap_or(&0),
-                            *chunk.get(4).unwrap_or(&0),
-                            *chunk.get(5).unwrap_or(&0),
-                            *chunk.get(6).unwrap_or(&0),
-                            *chunk.get(7).unwrap_or(&0),
-                        ]);
-                        print!("0x{:016x} ", v);
+                    32 => {
+                        for chunk in data.chunks_exact(4) {
+                            let v = u32::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                            ]);
+                            print!("0x{:08x} ", v);
+                        }
+                        println!("");
                     }
-                    println!("");
+                    64 => {
+                        for chunk in data.chunks_exact(8) {
+                            let v = u64::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                                *chunk.get(4).unwrap_or(&0),
+                                *chunk.get(5).unwrap_or(&0),
+                                *chunk.get(6).unwrap_or(&0),
+                                *chunk.get(7).unwrap_or(&0),
+                            ]);
+                            print!("0x{:016x} ", v);
+                        }
+                        println!("");
+                    }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
             }
         }
         Argument::Variable(_) => unreachable!("variables are resolved before execute"),
         Argument::Memory(bytes) => {
-            for b in bytes.iter() {
-                print!("0x{:02x} ", b);
+            if chunk_bits == 1 {
+                let mut out = String::new();
+                for (i, b) in bytes.iter().enumerate() {
+                    if i > 0 { out.push('_'); }
+                    out.push_str(&format!("{:08b}", b));
+                }
+                println!("{}", out);
+            } else {
+                for b in bytes.iter() {
+                    print!("0x{:02x} ", b);
+                }
+                println!("");
             }
-            println!("");
         }
     }
     Ok(())
