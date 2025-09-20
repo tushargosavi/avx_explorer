@@ -1,5 +1,6 @@
 use std::arch::x86_64::*;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AType {
@@ -21,11 +22,16 @@ pub enum ArgType {
     Ptr,
 }
 
+pub trait ExecContext {
+    fn get_var(&self, name: &str) -> Option<&Argument>;
+    fn set_var(&mut self, name: &str, value: Argument);
+}
+
 pub trait FunctionInfo {
     fn name(&self) -> &str;
     fn arguments(&self) -> &[ArgType];
     fn return_type(&self) -> ArgType;
-    fn execute(&self, args: &[Argument]) -> Result<Argument, String>;
+    fn execute(&self, ctx: &mut dyn ExecContext, args: &[Argument]) -> Result<Argument, String>;
 }
 
 #[derive(Debug)]
@@ -33,7 +39,7 @@ pub struct Instruction {
     pub name: String,
     pub arguments: Vec<ArgType>,
     pub return_type: ArgType,
-    pub exec: fn(&[Argument]) -> Result<Argument, String>,
+    pub exec: fn(&mut dyn ExecContext, &[Argument]) -> Result<Argument, String>,
 }
 
 impl Instruction {
@@ -41,7 +47,7 @@ impl Instruction {
         name: &str,
         arguments: Vec<ArgType>,
         return_type: ArgType,
-        exec: fn(&[Argument]) -> Result<Argument, String>,
+        exec: fn(&mut dyn ExecContext, &[Argument]) -> Result<Argument, String>,
     ) -> Self {
         Self {
             name: name.to_string(),
@@ -65,13 +71,13 @@ impl FunctionInfo for Instruction {
         self.return_type.clone()
     }
 
-    fn execute(&self, args: &[Argument]) -> Result<Argument, String> {
-        (self.exec)(args)
+    fn execute(&self, ctx: &mut dyn ExecContext, args: &[Argument]) -> Result<Argument, String> {
+        (self.exec)(ctx, args)
     }
 }
 
 pub struct FunctionRegistry {
-    pub functions: HashMap<String, Box<dyn FunctionInfo>>,
+    pub functions: HashMap<String, Arc<dyn FunctionInfo>>,
 }
 
 impl FunctionRegistry {
@@ -83,11 +89,11 @@ impl FunctionRegistry {
 
     pub fn register_instruction(&mut self, instruction: Instruction) {
         self.functions
-            .insert(instruction.name.clone(), Box::new(instruction));
+            .insert(instruction.name.clone(), Arc::new(instruction));
     }
 
-    pub fn find(&self, name: &str) -> Option<&dyn FunctionInfo> {
-        self.functions.get(name).map(|b| b.as_ref())
+    pub fn find(&self, name: &str) -> Option<Arc<dyn FunctionInfo>> {
+        self.functions.get(name).cloned()
     }
 }
 

@@ -16,7 +16,7 @@ impl Interpreter {
             "add",
             vec![ArgType::U64, ArgType::U64],
             ArgType::U64,
-            |args| {
+            |_, args| {
                 if args.len() != 2 {
                     return Err("add requires exactly 2 arguments".to_string());
                 }
@@ -24,7 +24,7 @@ impl Interpreter {
             },
         ));
 
-        registry.register_instruction(Instruction::new("test", vec![], ArgType::U64, |args| {
+        registry.register_instruction(Instruction::new("test", vec![], ArgType::U64, |_, args| {
             if let Some(first) = args.get(0) {
                 Ok(first.clone())
             } else {
@@ -32,19 +32,32 @@ impl Interpreter {
             }
         }));
 
-        registry.register_instruction(Instruction::new("print", vec![], ArgType::U64, |args| {
-            for arg in args {
-                display_argument_simple(arg);
-            }
-            Ok(Argument::Scalar(0))
-        }));
+        registry.register_instruction(Instruction::new(
+            "print",
+            vec![],
+            ArgType::U64,
+            |ctx, args| {
+                if args.is_empty() {
+                    if let Some(res) = ctx.get_var("_res") {
+                        display_argument_simple(res);
+                    } else {
+                        println!("_res is undefined");
+                    }
+                } else {
+                    for arg in args {
+                        display_argument_simple(arg);
+                    }
+                }
+                Ok(Argument::Scalar(0))
+            },
+        ));
 
         // print_hex(value [, chunk_bits]) where chunk_bits in {8,16,32,64}; default 32
         registry.register_instruction(Instruction::new(
             "print_hex",
             vec![],
             ArgType::U64,
-            |args| {
+            |_, args| {
                 let (value_arg, chunk_bits_opt) = match args.len() {
                     0 => return Err("print_hex requires at least 1 argument".to_string()),
                     1 => (&args[0], None),
@@ -60,7 +73,7 @@ impl Interpreter {
             "print_dec",
             vec![],
             ArgType::U64,
-            |args| {
+            |_, args| {
                 if args.is_empty() {
                     return Err("print_dec requires 1 argument".to_string());
                 }
@@ -74,7 +87,7 @@ impl Interpreter {
             "print_bin",
             vec![],
             ArgType::U64,
-            |args| {
+            |_, args| {
                 if args.is_empty() {
                     return Err("print_bin requires 1 argument".to_string());
                 }
@@ -87,7 +100,7 @@ impl Interpreter {
             "_mm256_mask_expand_epi8",
             vec![ArgType::I256, ArgType::I256, ArgType::U8],
             ArgType::I256,
-            |args| {
+            |_, args| {
                 if args.len() != 3 {
                     return Err("_mm256_mask_expand_epi8 requires exactly 3 arguments".to_string());
                 }
@@ -103,7 +116,7 @@ impl Interpreter {
             "_mm256_mask_expand_epi16",
             vec![ArgType::I256, ArgType::I256, ArgType::U16],
             ArgType::I256,
-            |args| {
+            |_, args| {
                 if args.len() != 3 {
                     return Err("_mm256_mask_expand_epi16 requires exactly 3 arguments".to_string());
                 }
@@ -119,7 +132,7 @@ impl Interpreter {
             "_mm256_mask_expand_epi32",
             vec![ArgType::I256, ArgType::I256, ArgType::U32],
             ArgType::I256,
-            |args| {
+            |_, args| {
                 if args.len() != 3 {
                     return Err("_mm256_mask_expand_epi32 requires exactly 3 arguments".to_string());
                 }
@@ -135,7 +148,7 @@ impl Interpreter {
             "_mm256_mask_expand_epi64",
             vec![ArgType::I256, ArgType::I256, ArgType::U64],
             ArgType::I256,
-            |args| {
+            |_, args| {
                 if args.len() != 3 {
                     return Err("_mm256_mask_expand_epi64 requires exactly 3 arguments".to_string());
                 }
@@ -189,13 +202,24 @@ impl Interpreter {
             .collect::<Result<Vec<_>, _>>()?;
 
         if let Some(func) = self.function_registry.find(&name) {
-            func.execute(&resolved_args)
+            let ctx: &mut dyn ExecContext = self;
+            func.execute(ctx, &resolved_args)
         } else {
             Err(format!("Unknown function: {}", name))
         }
     }
 
     // Old specialized methods retained for now but unused
+}
+
+impl ExecContext for Interpreter {
+    fn get_var(&self, name: &str) -> Option<&Argument> {
+        self.variables.get(name)
+    }
+
+    fn set_var(&mut self, name: &str, value: Argument) {
+        self.variables.insert(name.to_string(), value);
+    }
 }
 
 fn m256i_to_argument(value: __m256i) -> Argument {
