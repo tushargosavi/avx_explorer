@@ -1,0 +1,228 @@
+#[cfg(test)]
+mod tests {
+    use crate::simple_parser::{parse_input, AST, Argument, AType, Interpreter};
+
+    #[test]
+    fn test_parse_simple_function_call() {
+        let result = parse_input("test()");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "test");
+                assert!(args.is_empty());
+            },
+            _ => panic!("Expected Call"),
+        }
+    }
+
+    #[test]
+    fn test_parse_function_with_scalar_args() {
+        let result = parse_input("add(0x10, 20)");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "add");
+                assert_eq!(args.len(), 2);
+                assert_eq!(args[0], Argument::Scalar(16));
+                assert_eq!(args[1], Argument::Scalar(20));
+            },
+            _ => panic!("Expected Call"),
+        }
+    }
+
+    #[test]
+    fn test_parse_array_arguments() {
+        let result = parse_input("add(w[0x123, 0x456], qw[1, 2, 3, 4])");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "add");
+                assert_eq!(args.len(), 2);
+
+                match &args[0] {
+                    Argument::Array(AType::Word, values) => {
+                        assert_eq!(values, &[0x123, 0x456]);
+                    },
+                    _ => panic!("Expected Word array"),
+                }
+
+                match &args[1] {
+                    Argument::Array(AType::QuadWord, values) => {
+                        assert_eq!(values, &[1, 2, 3, 4]);
+                    },
+                    _ => panic!("Expected QuadWord array"),
+                }
+            },
+            _ => panic!("Expected Call"),
+        }
+    }
+
+    #[test]
+    fn test_parse_assignment() {
+        let result = parse_input("result = add(5, 10)");
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Assign { dest, child } => {
+                assert_eq!(dest, "result");
+                match *child {
+                    AST::Call { name, args } => {
+                        assert_eq!(name, "add");
+                        assert_eq!(args.len(), 2);
+                        assert_eq!(args[0], Argument::Scalar(5));
+                        assert_eq!(args[1], Argument::Scalar(10));
+                    },
+                    _ => panic!("Expected Call in assignment"),
+                }
+            },
+            _ => panic!("Expected Assign"),
+        }
+    }
+
+    #[test]
+    fn test_parse_variable_declaration() {
+        let result = parse_input("x = 42");
+                assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Var { name, value } => {
+                assert_eq!(name, "x");
+                assert_eq!(value, Argument::Scalar(42));
+            },
+            _ => panic!("Expected Var"),
+        }
+    }
+
+    #[test]
+    fn test_parse_different_number_formats() {
+        let test_cases = vec![
+            ("test(0xFF)", 255),
+            ("test(0o77)", 63),
+            ("test(0b1010)", 10),
+            ("test(123)", 123),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = parse_input(input);
+            assert!(result.is_ok(), "Failed to parse: {}", input);
+
+            match result.unwrap() {
+                AST::Call { args, .. } => {
+                    assert_eq!(args.len(), 1);
+                    assert_eq!(args[0], Argument::Scalar(expected));
+                },
+                _ => panic!("Expected Call"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_argument_conversions() {
+        let scalar = Argument::Scalar(0x123456789ABCDEF0);
+        let array = Argument::Array(AType::QuadWord, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+
+        assert_eq!(scalar.to_u64(), Some(0x123456789ABCDEF0));
+        assert_eq!(scalar.to_u32(), Some(0x9ABCDEF0));
+        assert_eq!(scalar.to_u16(), Some(0xDEF0));
+
+        let i256_result = scalar.to_i256();
+        assert!(i256_result.is_some());
+        let i256_array = i256_result.unwrap();
+        assert_eq!(i256_array[0] as u32, 0x9ABCDEF0u32);
+
+        let i512_result = scalar.to_i512();
+        assert!(i512_result.is_some());
+        let i512_array = i512_result.unwrap();
+        assert_eq!(i512_array[0], 0x123456789ABCDEF0i64);
+
+        assert_eq!(array.to_u64(), Some(1));
+        assert_eq!(array.to_u32(), Some(1));
+        assert_eq!(array.to_u16(), Some(1));
+    }
+
+    #[test]
+    fn test_interpreter_variable_storage() {
+        let mut interpreter = Interpreter::new();
+
+        let ast = AST::Var {
+            name: "x".to_string(),
+            value: Argument::Scalar(42),
+        };
+
+        let result = interpreter.execute(ast).unwrap();
+        assert_eq!(result, Argument::Scalar(42));
+
+        let call_ast = AST::Call {
+            name: "test".to_string(),
+            args: vec![Argument::Variable("x".to_string())],
+        };
+
+        let result = interpreter.execute(call_ast).unwrap();
+        assert_eq!(result, Argument::Scalar(42));
+    }
+
+    #[test]
+    fn test_interpreter_assignment() {
+        let mut interpreter = Interpreter::new();
+
+        let ast = AST::Assign {
+            dest: "result".to_string(),
+            child: Box::new(AST::Call {
+                name: "add".to_string(),
+                args: vec![Argument::Scalar(10), Argument::Scalar(20)],
+            }),
+        };
+
+        let result = interpreter.execute(ast).unwrap();
+        assert_eq!(result, Argument::Scalar(30));
+
+        let x = interpreter.variables.get("result").unwrap();
+        assert_eq!(x, &Argument::Scalar(30));
+    }
+
+    #[test]
+    fn test_interpreter_add_function() {
+        let mut interpreter = Interpreter::new();
+
+        let ast = AST::Call {
+            name: "add".to_string(),
+            args: vec![Argument::Scalar(15), Argument::Scalar(27)],
+        };
+
+        let result = interpreter.execute(ast).unwrap();
+        assert_eq!(result, Argument::Scalar(42));
+    }
+
+    #[test]
+    fn test_complex_example() {
+        let input = "_mm256_shuffle_epi8(w[0x00,0x12,0x13,0x43],w[0xFF,0x01,0xFF,0x83])";
+        let result = parse_input(input);
+
+                assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "_mm256_shuffle_epi8");
+                assert_eq!(args.len(), 2);
+
+                match &args[0] {
+                    Argument::Array(AType::Word, values) => {
+                        assert_eq!(values, &[0x00, 0x12, 0x13, 0x43]);
+                    },
+                    _ => panic!("Expected Word array"),
+                }
+
+                match &args[1] {
+                    Argument::Array(AType::Word, values) => {
+                        assert_eq!(values, &[0xFF, 0x01, 0xFF, 0x83]);
+                    },
+                    _ => panic!("Expected Word array"),
+                }
+            },
+            _ => panic!("Expected Call"),
+        }
+    }
+}
