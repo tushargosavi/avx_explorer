@@ -1,6 +1,9 @@
-mod simple_parser;
+mod ast;
+mod interpreter;
+mod parser;
+use parser::parse_input;
 
-use simple_parser::{Interpreter, parse_input};
+use crate::interpreter::Interpreter;
 
 #[cfg(test)]
 mod tests;

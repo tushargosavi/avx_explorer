@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::simple_parser::{parse_input, AST, Argument, AType, Interpreter};
+    use crate::simple_parser::{AST, AType, Argument, Interpreter, parse_input};
 
     #[test]
     fn test_parse_simple_function_call() {
@@ -11,7 +11,7 @@ mod tests {
             AST::Call { name, args } => {
                 assert_eq!(name, "test");
                 assert!(args.is_empty());
-            },
+            }
             _ => panic!("Expected Call"),
         }
     }
@@ -27,7 +27,7 @@ mod tests {
                 assert_eq!(args.len(), 2);
                 assert_eq!(args[0], Argument::Scalar(16));
                 assert_eq!(args[1], Argument::Scalar(20));
-            },
+            }
             _ => panic!("Expected Call"),
         }
     }
@@ -45,17 +45,17 @@ mod tests {
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
                         assert_eq!(values, &[0x123, 0x456]);
-                    },
+                    }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::QuadWord, values) => {
                         assert_eq!(values, &[1, 2, 3, 4]);
-                    },
+                    }
                     _ => panic!("Expected QuadWord array"),
                 }
-            },
+            }
             _ => panic!("Expected Call"),
         }
     }
@@ -74,10 +74,10 @@ mod tests {
                         assert_eq!(args.len(), 2);
                         assert_eq!(args[0], Argument::Scalar(5));
                         assert_eq!(args[1], Argument::Scalar(10));
-                    },
+                    }
                     _ => panic!("Expected Call in assignment"),
                 }
-            },
+            }
             _ => panic!("Expected Assign"),
         }
     }
@@ -85,13 +85,13 @@ mod tests {
     #[test]
     fn test_parse_variable_declaration() {
         let result = parse_input("x = 42");
-                assert!(result.is_ok());
+        assert!(result.is_ok());
 
         match result.unwrap() {
             AST::Var { name, value } => {
                 assert_eq!(name, "x");
                 assert_eq!(value, Argument::Scalar(42));
-            },
+            }
             _ => panic!("Expected Var"),
         }
     }
@@ -113,7 +113,7 @@ mod tests {
                 AST::Call { args, .. } => {
                     assert_eq!(args.len(), 1);
                     assert_eq!(args[0], Argument::Scalar(expected));
-                },
+                }
                 _ => panic!("Expected Call"),
             }
         }
@@ -201,7 +201,7 @@ mod tests {
         let input = "_mm256_shuffle_epi8(w[0x00,0x12,0x13,0x43],w[0xFF,0x01,0xFF,0x83])";
         let result = parse_input(input);
 
-                assert!(result.is_ok());
+        assert!(result.is_ok());
 
         match result.unwrap() {
             AST::Call { name, args } => {
@@ -211,17 +211,17 @@ mod tests {
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
                         assert_eq!(values, &[0x00, 0x12, 0x13, 0x43]);
-                    },
+                    }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::Word, values) => {
                         assert_eq!(values, &[0xFF, 0x01, 0xFF, 0x83]);
-                    },
+                    }
                     _ => panic!("Expected Word array"),
                 }
-            },
+            }
             _ => panic!("Expected Call"),
         }
     }
