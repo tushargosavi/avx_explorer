@@ -146,6 +146,44 @@ impl Interpreter {
             },
         ));
 
+        // Emulate memory-based expandload: _mm256_mask_expandloadu_epi32(src, k, mem)
+        registry.register_instruction(Instruction::new(
+            "_mm256_mask_expandloadu_epi32",
+            vec![ArgType::I256, ArgType::U8, ArgType::Ptr],
+            ArgType::I256,
+            |ctx, args| {
+                if !(is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl")) {
+                    return Err("AVX-512F and AVX-512VL not supported on this CPU/runtime".to_string());
+                }
+                if args.len() != 3 {
+                    return Err("_mm256_mask_expandloadu_epi32 requires exactly 3 arguments".to_string());
+                }
+                let src = args[0].to_i256();
+                let mask = args[1].to_u8();
+
+                // Resolve memory pointer
+                let mem_ptr: *const i32 = match &args[2] {
+                    Argument::Variable(name) => {
+                        match ctx.get_var(name.as_str()) {
+                            Some(Argument::Memory(bytes)) => bytes.as_ptr() as *const i32,
+                            Some(other) => {
+                                return Err(format!(
+                                    "Pointer '{}' does not reference memory, found {:?}",
+                                    name, other
+                                ))
+                            }
+                            None => return Err(format!("Undefined pointer variable: {}", name)),
+                        }
+                    }
+                    Argument::Memory(bytes) => bytes.as_ptr() as *const i32,
+                    _ => return Err("Pointer argument must be a memory variable or mem[...]".to_string()),
+                };
+
+                let result = unsafe { _mm256_mask_expandloadu_epi32(src, mask, mem_ptr) };
+                Ok(m256i_to_argument(result))
+            },
+        ));
+
         registry.register_instruction(Instruction::new(
             "_mm256_mask_expand_epi64",
             vec![ArgType::I256, ArgType::I256, ArgType::U64],
@@ -196,19 +234,45 @@ impl Interpreter {
     }
 
     fn execute_call(&mut self, name: String, args: Vec<Argument>) -> Result<Argument, String> {
-        let resolved_args: Vec<Argument> = args
-            .into_iter()
-            .map(|arg| match arg {
-                Argument::Variable(var_name) => self
-                    .variables
-                    .get(&var_name)
-                    .cloned()
-                    .ok_or_else(|| format!("Undefined variable: {}", var_name)),
-                other => Ok(other),
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-
         if let Some(func) = self.function_registry.find(&name) {
+            let resolved_args: Vec<Argument> = if func.arguments().is_empty() {
+                // No type info: resolve all variables eagerly
+                args
+                    .into_iter()
+                    .map(|arg| match arg {
+                        Argument::Variable(var_name) => self
+                            .variables
+                            .get(&var_name)
+                            .cloned()
+                            .ok_or_else(|| format!("Undefined variable: {}", var_name)),
+                        other => Ok(other),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?
+            } else {
+                // Use signature to preserve pointer variables for ArgType::Ptr
+                let sig = func.arguments();
+                let mut out = Vec::with_capacity(args.len());
+                for (idx, arg) in args.into_iter().enumerate() {
+                    let keep_as_ptr = sig.get(idx).map(|t| *t == ArgType::Ptr).unwrap_or(false);
+                    if keep_as_ptr {
+                        out.push(arg);
+                    } else {
+                        match arg {
+                            Argument::Variable(var_name) => {
+                                let val = self
+                                    .variables
+                                    .get(&var_name)
+                                    .cloned()
+                                    .ok_or_else(|| format!("Undefined variable: {}", var_name))?;
+                                out.push(val);
+                            }
+                            other => out.push(other),
+                        }
+                    }
+                }
+                out
+            };
+
             let ctx: &mut dyn ExecContext = self;
             func.execute(ctx, &resolved_args)
         } else {

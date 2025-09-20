@@ -94,6 +94,10 @@ fn parse_call(input: &str) -> Result<AST, String> {
 }
 
 fn parse_argument(input: &str) -> Result<Argument, String> {
+    // memory constructor: mem[SIZE]
+    if input.starts_with("mem[") && input.ends_with(']') {
+        return parse_memory(input);
+    }
     if input.contains('[') && input.ends_with(']') {
         parse_array(input)
     } else if input.starts_with("0x") || input.starts_with("0o") || input.starts_with("0b") {
@@ -207,6 +211,25 @@ fn parse_array(input: &str) -> Result<Argument, String> {
         }
         _ => return Err(format!("Unknown array type: {}", array_type)),
     }
+}
+
+fn parse_memory(input: &str) -> Result<Argument, String> {
+    // Format: mem[SIZE]
+    if !input.starts_with("mem[") || !input.ends_with(']') {
+        return Err("Invalid memory initializer".to_string());
+    }
+    let size_str = &input[4..input.len() - 1];
+    if size_str.trim().is_empty() {
+        return Err("mem[] requires a size".to_string());
+    }
+    // Reuse number parser so hex/bin/dec work; expect Scalar or ScalarTyped
+    let size_arg = parse_number(size_str)?;
+    let size = match size_arg {
+        Argument::Scalar(v) => v as usize,
+        Argument::ScalarTyped(_, v) => v as usize,
+        _ => return Err("mem[size] size must be a scalar number".to_string()),
+    };
+    Ok(Argument::Memory(vec![0u8; size]))
 }
 
 fn parse_number(input: &str) -> Result<Argument, String> {
