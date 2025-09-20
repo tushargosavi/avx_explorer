@@ -54,7 +54,7 @@ impl FunctionRegistry {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Argument {
-    Array(AType, Vec<u64>),
+    Array(AType, [u8; 64]),
     Memory(Vec<u8>),
     Scalar(u64),
     Variable(String),
@@ -70,10 +70,18 @@ pub enum AST {
 impl Argument {
     pub fn to_i256(&self) -> __m256i {
         match self {
-            Argument::Array(_, values) => {
+            Argument::Array(_, bytes) => {
                 let mut result = [0i32; 8];
-                for (i, &val) in values.iter().take(8).enumerate() {
-                    result[i] = val as i32;
+                for i in 0..8 {
+                    let start = i * 4;
+                    if start + 4 <= bytes.len() {
+                        result[i] = i32::from_le_bytes([
+                            bytes[start],
+                            bytes[start + 1],
+                            bytes[start + 2],
+                            bytes[start + 3],
+                        ]);
+                    }
                 }
                 unsafe { std::mem::transmute(result) }
             }
@@ -88,10 +96,22 @@ impl Argument {
 
     pub fn to_i512(&self) -> __m512i {
         match self {
-            Argument::Array(_, values) => {
+            Argument::Array(_, bytes) => {
                 let mut result = [0i64; 8];
-                for (i, &val) in values.iter().take(8).enumerate() {
-                    result[i] = val as i64;
+                for i in 0..8 {
+                    let start = i * 8;
+                    if start + 8 <= bytes.len() {
+                        result[i] = i64::from_le_bytes([
+                            bytes[start],
+                            bytes[start + 1],
+                            bytes[start + 2],
+                            bytes[start + 3],
+                            bytes[start + 4],
+                            bytes[start + 5],
+                            bytes[start + 6],
+                            bytes[start + 7],
+                        ]);
+                    }
                 }
                 unsafe { std::mem::transmute(result) }
             }
@@ -107,7 +127,18 @@ impl Argument {
     pub fn to_u64(&self) -> u64 {
         match self {
             Argument::Scalar(val) => *val,
-            Argument::Array(_, values) => values.first().copied().unwrap_or(0),
+            Argument::Array(_, bytes) => {
+                if bytes.len() >= 8 {
+                    u64::from_le_bytes([
+                        bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+                        bytes[7],
+                    ])
+                } else {
+                    let mut temp = [0u8; 8];
+                    temp[..bytes.len()].copy_from_slice(bytes);
+                    u64::from_le_bytes(temp)
+                }
+            }
             _ => 0,
         }
     }
@@ -115,7 +146,15 @@ impl Argument {
     pub fn to_u32(&self) -> u32 {
         match self {
             Argument::Scalar(val) => *val as u32,
-            Argument::Array(_, values) => values.first().map(|&v| v as u32).unwrap_or(0),
+            Argument::Array(_, bytes) => {
+                if bytes.len() >= 4 {
+                    u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]])
+                } else {
+                    let mut temp = [0u8; 4];
+                    temp[..bytes.len()].copy_from_slice(bytes);
+                    u32::from_le_bytes(temp)
+                }
+            }
             _ => 0,
         }
     }
@@ -123,7 +162,15 @@ impl Argument {
     pub fn to_u16(&self) -> u16 {
         match self {
             Argument::Scalar(val) => *val as u16,
-            Argument::Array(_, values) => values.first().map(|&v| v as u16).unwrap_or(0),
+            Argument::Array(_, bytes) => {
+                if bytes.len() >= 2 {
+                    u16::from_le_bytes([bytes[0], bytes[1]])
+                } else if bytes.len() == 1 {
+                    u16::from(bytes[0])
+                } else {
+                    0
+                }
+            }
             _ => 0,
         }
     }
@@ -131,7 +178,7 @@ impl Argument {
     pub fn to_u8(&self) -> u8 {
         match self {
             Argument::Scalar(val) => *val as u8,
-            Argument::Array(_, values) => values.first().map(|&v| v as u8).unwrap_or(0),
+            Argument::Array(_, bytes) => bytes.first().copied().unwrap_or(0),
             _ => 0,
         }
     }

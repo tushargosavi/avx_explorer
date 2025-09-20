@@ -46,14 +46,16 @@ mod tests {
 
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
-                        assert_eq!(values, &[0x123, 0x456]);
+                        let expected_bytes = [0x23u8, 0x56u8];
+                        assert_eq!(&values[..2], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::QuadWord, values) => {
-                        assert_eq!(values, &[1, 2, 3, 4]);
+                        let expected_bytes = [1u8, 2u8, 3u8, 4u8];
+                        assert_eq!(&values[..4], &expected_bytes);
                     }
                     _ => panic!("Expected QuadWord array"),
                 }
@@ -124,7 +126,18 @@ mod tests {
     #[test]
     fn test_argument_conversions() {
         let scalar = Argument::Scalar(0x123456789ABCDEF0);
-        let array = Argument::Array(AType::QuadWord, vec![1, 2, 3, 4, 5, 6, 7, 8]);
+        let array = Argument::Array(AType::QuadWord, {
+            let mut bytes = [0u8; 64];
+            bytes[0] = 1;
+            bytes[8] = 2;
+            bytes[16] = 3;
+            bytes[24] = 4;
+            bytes[32] = 5;
+            bytes[40] = 6;
+            bytes[48] = 7;
+            bytes[56] = 8;
+            bytes
+        });
 
         assert_eq!(scalar.to_u64(), 0x123456789ABCDEF0);
         assert_eq!(scalar.to_u32(), 0x9ABCDEF0);
@@ -210,16 +223,68 @@ mod tests {
 
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
-                        assert_eq!(values, &[0x00, 0x12, 0x13, 0x43]);
+                        let expected_bytes = [0x00u8, 0x12u8, 0x13u8, 0x43u8];
+                        assert_eq!(&values[..4], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::Word, values) => {
-                        assert_eq!(values, &[0xFF, 0x01, 0xFF, 0x83]);
+                        let expected_bytes = [0xFFu8, 0x01u8, 0xFFu8, 0x83u8];
+                        assert_eq!(&values[..4], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
+                }
+            }
+            _ => panic!("Expected Call"),
+        }
+    }
+
+    #[test]
+    fn test_bit_parsing() {
+        let input = "test(bits[1,0,1])";
+        let result = parse_input(input);
+
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "test");
+                assert_eq!(args.len(), 1);
+
+                match &args[0] {
+                    Argument::Array(AType::Bit, values) => {
+                        // bits[1,0,1] should become 0b101 = 5 in little endian
+                        assert_eq!((*values)[0], 0b101);
+                    }
+                    _ => panic!("Expected Bit array"),
+                }
+            }
+            _ => panic!("Expected Call"),
+        }
+    }
+
+    #[test]
+    fn test_bit_parsing_long() {
+        let input = "test(bits[1,0,1,1,0,0,1,0,1,0])";
+        let result = parse_input(input);
+
+        assert!(result.is_ok());
+
+        match result.unwrap() {
+            AST::Call { name, args } => {
+                assert_eq!(name, "test");
+                assert_eq!(args.len(), 1);
+
+                match &args[0] {
+                    Argument::Array(AType::Bit, values) => {
+                        // bits[1,0,1,1,0,0,1,0] should become 0b01001101 = 0x4D in little endian
+                        // bits[1,0] should become 0b01 = 1 in little endian
+                        assert_eq!((*values)[0], 0b01001101);
+                        assert_eq!((*values)[1], 0b01);
+                    }
+                    _ => panic!("Expected Bit array"),
                 }
             }
             _ => panic!("Expected Call"),

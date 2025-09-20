@@ -1,3 +1,5 @@
+use std::collections::hash_map::Values;
+
 use crate::ast::*;
 
 pub fn parse_input(input: &str) -> Result<AST, String> {
@@ -123,23 +125,97 @@ fn parse_array(input: &str) -> Result<Argument, String> {
     let values_str = &input[open_bracket + 1..input.len() - 1];
 
     if values_str.trim().is_empty() {
-        return Ok(Argument::Array(atype, Vec::new()));
+        return Ok(Argument::Array(atype, [0u8; 64]));
     }
 
-    let values = values_str
-        .split(',')
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .map(parse_number)
-        .map(|r| {
-            r.and_then(|arg| match arg {
-                Argument::Scalar(val) => Ok(val),
-                _ => Err("Array values must be scalar numbers".to_string()),
-            })
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+    match atype {
+        AType::Bit => {
+            let values: Vec<u64> = values_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(|s| {
+                    s.parse::<u64>()
+                        .map_err(|_| format!("Invalid bit value: {}", s))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
 
-    Ok(Argument::Array(atype, values))
+            let mut bytes = [0u8; 64];
+            if values.len() <= 64 {
+                for (i, &bit) in values.iter().enumerate() {
+                    let byte_index = i / 8;
+                    let bit_index = i % 8;
+                    if bit != 0 {
+                        bytes[byte_index] |= 1 << bit_index;
+                    }
+                }
+                Ok(Argument::Array(atype, bytes))
+            } else {
+                let mut current_byte = 0u8;
+                let mut byte_index = 0;
+                for (i, &bit) in values.iter().enumerate() {
+                    if i > 0 && i % 8 == 0 {
+                        if byte_index < 64 {
+                            bytes[byte_index] = current_byte;
+                            byte_index += 1;
+                        }
+                        current_byte = 0;
+                    }
+                    if bit != 0 {
+                        current_byte |= 1 << (i % 8);
+                    }
+                }
+                if byte_index < 64 {
+                    bytes[byte_index] = current_byte;
+                }
+                Ok(Argument::Array(atype, bytes))
+            }
+        }
+        a_type => {
+            let values = values_str
+                .split(',')
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty())
+                .map(parse_number)
+                .map(|r| {
+                    r.and_then(|arg| match arg {
+                        Argument::Scalar(val) => Ok(val),
+                        _ => Err("Array values must be scalar numbers".to_string()),
+                    })
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            let mut rbytes = [0u8; 64];
+
+            match a_type {
+                AType::Byte => {
+                    for (i, &val) in values.iter().take(64).enumerate() {
+                        rbytes[i] = val as u8;
+                    }
+                }
+                AType::Word => {
+                    for (i, &val) in values.iter().take(32).enumerate() {
+                        let bytes = (val as u16).to_le_bytes();
+                        rbytes[i * 2..i * 2 + 2].copy_from_slice(&bytes);
+                    }
+                }
+                AType::DoubleWord => {
+                    for (i, &val) in values.iter().take(32).enumerate() {
+                        let bytes = (val as u32).to_le_bytes();
+                        rbytes[i * 4..i * 4 + 4].copy_from_slice(&bytes);
+                    }
+                }
+                AType::QuadWord => {
+                    for (i, &val) in values.iter().take(32).enumerate() {
+                        let bytes = val.to_le_bytes();
+                        rbytes[i * 8..i * 8 + 8].copy_from_slice(&bytes);
+                    }
+                }
+                _ => {}
+            }
+            Ok(Argument::Array(a_type, rbytes))
+        }
+    }
 }
 
 fn parse_number(input: &str) -> Result<Argument, String> {

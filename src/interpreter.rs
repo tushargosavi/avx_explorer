@@ -120,16 +120,62 @@ impl Interpreter {
     fn display_argument(&self, arg: &Argument) {
         match arg {
             Argument::Scalar(val) => println!("{}", val),
-            Argument::Array(atype, values) => {
-                let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
-                match atype {
-                    AType::Bit => println!("bits[{}]", values.len()),
-                    AType::Byte => println!("b[{}]", values_str.join(", ")),
-                    AType::Word => println!("w[{}]", values_str.join(", ")),
-                    AType::DoubleWord => println!("dw[{}]", values_str.join(", ")),
-                    AType::QuadWord => println!("qw[{}]", values_str.join(", ")),
+            Argument::Array(atype, bytes) => match atype {
+                AType::Bit => {
+                    let bit_count = bytes.iter().map(|&b| b.count_ones()).sum::<u32>();
+                    println!("bits[{} bits]", bit_count);
                 }
-            }
+                AType::Byte => {
+                    let values_str: Vec<String> =
+                        bytes.iter().take(32).map(|v| v.to_string()).collect();
+                    println!("b[{}]", values_str.join(", "));
+                }
+                AType::Word => {
+                    let words: Vec<u16> = bytes
+                        .chunks(2)
+                        .map(|chunk| u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]))
+                        .take(32)
+                        .collect();
+                    let values_str: Vec<String> = words.iter().map(|v| v.to_string()).collect();
+                    println!("w[{}]", values_str.join(", "));
+                }
+                AType::DoubleWord => {
+                    let dwords: Vec<u32> = bytes
+                        .chunks(4)
+                        .map(|chunk| {
+                            u32::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                            ])
+                        })
+                        .take(16)
+                        .collect();
+                    let values_str: Vec<String> = dwords.iter().map(|v| v.to_string()).collect();
+                    println!("dw[{}]", values_str.join(", "));
+                }
+                AType::QuadWord => {
+                    let qwords: Vec<u64> = bytes
+                        .chunks(8)
+                        .map(|chunk| {
+                            u64::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                                *chunk.get(4).unwrap_or(&0),
+                                *chunk.get(5).unwrap_or(&0),
+                                *chunk.get(6).unwrap_or(&0),
+                                *chunk.get(7).unwrap_or(&0),
+                            ])
+                        })
+                        .take(8)
+                        .collect();
+                    let values_str: Vec<String> = qwords.iter().map(|v| v.to_string()).collect();
+                    println!("qw[{}]", values_str.join(", "));
+                }
+            },
             Argument::Variable(name) => {
                 if let Some(var_arg) = self.variables.get(name) {
                     self.display_argument(var_arg);
@@ -190,12 +236,20 @@ impl Interpreter {
         let k = args[1].to_u64() as u8;
         let a = args[2].to_i256();
 
+        println!("src {:?} k {:?} a {:?}", src, k, a);
         let result = unsafe { _mm256_mask_expand_epi64(src, k, a) };
+        println!("src {:?} k {:?} a {:?} res {:?}", src, k, a, result);
         Ok(self.m256i_to_argument(result))
     }
 
     fn m256i_to_argument(&self, value: __m256i) -> Argument {
         let array: [i32; 8] = unsafe { std::mem::transmute(value) };
-        Argument::Array(AType::DoubleWord, array.iter().map(|&x| x as u64).collect())
+        let mut bytes = [0u8; 64];
+        for (i, &val) in array.iter().enumerate() {
+            let val_bytes = val.to_le_bytes();
+            let start = i * 4;
+            bytes[start..start + 4].copy_from_slice(&val_bytes);
+        }
+        Argument::Array(AType::DoubleWord, bytes)
     }
 }
