@@ -46,16 +46,16 @@ mod tests {
 
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
-                        let expected_bytes = [0x23u8, 0x56u8];
-                        assert_eq!(&values[..2], &expected_bytes);
+                        let expected_bytes = [0x23u8, 0x01u8, 0x56u8, 0x04u8];
+                        assert_eq!(&values[..4], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::QuadWord, values) => {
-                        let expected_bytes = [1u8, 2u8, 3u8, 4u8];
-                        assert_eq!(&values[..4], &expected_bytes);
+                        let expected_bytes = [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 4u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
+                        assert_eq!(&values[..32], &expected_bytes);
                     }
                     _ => panic!("Expected QuadWord array"),
                 }
@@ -223,16 +223,16 @@ mod tests {
 
                 match &args[0] {
                     Argument::Array(AType::Word, values) => {
-                        let expected_bytes = [0x00u8, 0x12u8, 0x13u8, 0x43u8];
-                        assert_eq!(&values[..4], &expected_bytes);
+                        let expected_bytes = [0x00u8, 0x00u8, 0x12u8, 0x00u8, 0x13u8, 0x00u8, 0x43u8, 0x00u8];
+                        assert_eq!(&values[..8], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
                 }
 
                 match &args[1] {
                     Argument::Array(AType::Word, values) => {
-                        let expected_bytes = [0xFFu8, 0x01u8, 0xFFu8, 0x83u8];
-                        assert_eq!(&values[..4], &expected_bytes);
+                        let expected_bytes = [0xFFu8, 0x00u8, 0x01u8, 0x00u8, 0xFFu8, 0x00u8, 0x83u8, 0x00u8];
+                        assert_eq!(&values[..8], &expected_bytes);
                     }
                     _ => panic!("Expected Word array"),
                 }
