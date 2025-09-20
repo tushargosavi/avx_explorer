@@ -1,3 +1,4 @@
+use std::arch::x86_64::*;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -10,6 +11,49 @@ pub enum AType {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum ArgType {
+    I256,
+    I512,
+    U64,
+    U32,
+    U16,
+    U8,
+    Ptr,
+}
+
+#[derive(Debug)]
+pub struct FunctionInfo {
+    pub name: String,
+    pub arguments: Vec<ArgType>,
+    pub return_type: ArgType,
+}
+
+#[derive(Debug)]
+pub struct FunctionRegistry {
+    pub functions: Vec<FunctionInfo>,
+}
+
+impl FunctionRegistry {
+    pub fn new() -> Self {
+        Self {
+            functions: Vec::new(),
+        }
+    }
+
+    pub fn register(&mut self, name: &str, arguments: Vec<ArgType>, return_type: ArgType) {
+        self.functions.push(FunctionInfo {
+            name: name.to_string(),
+            arguments,
+            return_type,
+        });
+    }
+
+    pub fn find(&self, name: &str) -> Option<&FunctionInfo> {
+        self.functions.iter().find(|f| f.name == name)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Argument {
     Array(AType, Vec<u64>),
     Memory(Vec<u8>),
@@ -19,90 +63,115 @@ pub enum Argument {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AST {
-    Call {
-        name: String,
-        args: Vec<Argument>,
-    },
-    Var {
-        name: String,
-        value: Argument,
-    },
-    Assign {
-        dest: String,
-        child: Box<AST>,
-    },
+    Call { name: String, args: Vec<Argument> },
+    Var { name: String, value: Argument },
+    Assign { dest: String, child: Box<AST> },
 }
 
 impl Argument {
-    pub fn to_i256(&self) -> Option<[i32; 8]> {
+    pub fn to_i256(&self) -> __m256i {
         match self {
             Argument::Array(_, values) => {
                 let mut result = [0i32; 8];
                 for (i, &val) in values.iter().take(8).enumerate() {
                     result[i] = val as i32;
                 }
-                Some(result)
+                unsafe { std::mem::transmute(result) }
             }
             Argument::Scalar(val) => {
                 let mut result = [0i32; 8];
                 result[0] = *val as i32;
-                Some(result)
+                unsafe { std::mem::transmute(result) }
             }
-            _ => None,
+            _ => unsafe { std::mem::transmute([0i32; 8]) },
         }
     }
 
-    pub fn to_i512(&self) -> Option<[i64; 8]> {
+    pub fn to_i512(&self) -> __m512i {
         match self {
             Argument::Array(_, values) => {
                 let mut result = [0i64; 8];
                 for (i, &val) in values.iter().take(8).enumerate() {
                     result[i] = val as i64;
                 }
-                Some(result)
+                unsafe { std::mem::transmute(result) }
             }
             Argument::Scalar(val) => {
                 let mut result = [0i64; 8];
                 result[0] = *val as i64;
-                Some(result)
+                unsafe { std::mem::transmute(result) }
             }
-            _ => None,
+            _ => unsafe { std::mem::transmute([0i64; 8]) },
         }
     }
 
-    pub fn to_u64(&self) -> Option<u64> {
+    pub fn to_u64(&self) -> u64 {
         match self {
-            Argument::Scalar(val) => Some(*val),
-            Argument::Array(_, values) => values.first().copied(),
-            _ => None,
+            Argument::Scalar(val) => *val,
+            Argument::Array(_, values) => values.first().copied().unwrap_or(0),
+            _ => 0,
         }
     }
 
-    pub fn to_u32(&self) -> Option<u32> {
+    pub fn to_u32(&self) -> u32 {
         match self {
-            Argument::Scalar(val) => Some(*val as u32),
-            Argument::Array(_, values) => values.first().map(|&v| v as u32),
-            _ => None,
+            Argument::Scalar(val) => *val as u32,
+            Argument::Array(_, values) => values.first().map(|&v| v as u32).unwrap_or(0),
+            _ => 0,
         }
     }
 
-    pub fn to_u16(&self) -> Option<u16> {
+    pub fn to_u16(&self) -> u16 {
         match self {
-            Argument::Scalar(val) => Some(*val as u16),
-            Argument::Array(_, values) => values.first().map(|&v| v as u16),
-            _ => None,
+            Argument::Scalar(val) => *val as u16,
+            Argument::Array(_, values) => values.first().map(|&v| v as u16).unwrap_or(0),
+            _ => 0,
+        }
+    }
+
+    pub fn to_u8(&self) -> u8 {
+        match self {
+            Argument::Scalar(val) => *val as u8,
+            Argument::Array(_, values) => values.first().map(|&v| v as u8).unwrap_or(0),
+            _ => 0,
         }
     }
 }
 
 pub struct Interpreter {
     pub variables: HashMap<String, Argument>,
+    pub function_registry: FunctionRegistry,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let mut registry = FunctionRegistry::new();
+
+        // Register the AVX functions
+        registry.register(
+            "_mm256_mask_expand_epi8",
+            vec![ArgType::I256, ArgType::I256, ArgType::U8],
+            ArgType::I256,
+        );
+        registry.register(
+            "_mm256_mask_expand_epi16",
+            vec![ArgType::I256, ArgType::I256, ArgType::U16],
+            ArgType::I256,
+        );
+        registry.register(
+            "_mm256_mask_expand_epi32",
+            vec![ArgType::I256, ArgType::I256, ArgType::U32],
+            ArgType::I256,
+        );
+        registry.register(
+            "_mm256_mask_expand_epi64",
+            vec![ArgType::I256, ArgType::I256, ArgType::U64],
+            ArgType::I256,
+        );
+
         Self {
             variables: HashMap::new(),
+            function_registry: registry,
         }
     }
 
@@ -125,17 +194,23 @@ impl Interpreter {
         let resolved_args: Vec<Argument> = args
             .into_iter()
             .map(|arg| match arg {
-                Argument::Variable(var_name) => {
-                    self.variables.get(&var_name).cloned()
-                        .ok_or_else(|| format!("Undefined variable: {}", var_name))
-                }
+                Argument::Variable(var_name) => self
+                    .variables
+                    .get(&var_name)
+                    .cloned()
+                    .ok_or_else(|| format!("Undefined variable: {}", var_name)),
                 other => Ok(other),
             })
             .collect::<Result<Vec<_>, _>>()?;
 
+        println!("Resolved arguments: {:?}", resolved_args);
         match name.as_str() {
             "add" => self.execute_add(&resolved_args),
             "test" => Ok(Argument::Scalar(42)),
+            "_mm256_mask_expand_epi8" => self.execute_mm256_mask_expand_epi8(&resolved_args),
+            "_mm256_mask_expand_epi16" => self.execute_mm256_mask_expand_epi16(&resolved_args),
+            "_mm256_mask_expand_epi32" => self.execute_mm256_mask_expand_epi32(&resolved_args),
+            "_mm256_mask_expand_epi64" => self.execute_mm256_mask_expand_epi64(&resolved_args),
             _ => Err(format!("Unknown function: {}", name)),
         }
     }
@@ -145,10 +220,68 @@ impl Interpreter {
             return Err("add requires exactly 2 arguments".to_string());
         }
 
-        let a = args[0].to_u64().ok_or("First argument must be convertible to u64")?;
-        let b = args[1].to_u64().ok_or("Second argument must be convertible to u64")?;
+        let a = args[0].to_u64();
+        let b = args[1].to_u64();
 
         Ok(Argument::Scalar(a + b))
+    }
+
+    fn execute_mm256_mask_expand_epi8(&self, args: &[Argument]) -> Result<Argument, String> {
+        if args.len() != 3 {
+            return Err("_mm256_mask_expand_epi8 requires exactly 3 arguments".to_string());
+        }
+
+        let src = args[0].to_i256();
+        let mask = args[1].to_i256();
+        let k = args[2].to_u8() as u32;
+
+        let result = unsafe { _mm256_mask_expand_epi8(src, k, mask) };
+        Ok(self.m256i_to_argument(result))
+    }
+
+    fn execute_mm256_mask_expand_epi16(&self, args: &[Argument]) -> Result<Argument, String> {
+        println!("Executing _mm256_mask_expand_epi16 {:?}", args);
+        if args.len() != 3 {
+            return Err("_mm256_mask_expand_epi16 requires exactly 3 arguments".to_string());
+        }
+
+        let src = args[0].to_i256();
+        let mask = args[1].to_i256();
+        let k = args[2].to_u16() as u16;
+
+        let result = unsafe { _mm256_mask_expand_epi16(src, k, mask) };
+        Ok(self.m256i_to_argument(result))
+    }
+
+    fn execute_mm256_mask_expand_epi32(&self, args: &[Argument]) -> Result<Argument, String> {
+        if args.len() != 3 {
+            return Err("_mm256_mask_expand_epi32 requires exactly 3 arguments".to_string());
+        }
+
+        let src = args[0].to_i256();
+        let mask = args[1].to_i256();
+        let k = args[2].to_u32() as u8;
+
+        let result = unsafe { _mm256_mask_expand_epi32(src, k, mask) };
+        Ok(self.m256i_to_argument(result))
+    }
+
+    fn execute_mm256_mask_expand_epi64(&self, args: &[Argument]) -> Result<Argument, String> {
+        if args.len() != 3 {
+            return Err("_mm256_mask_expand_epi64 requires exactly 3 arguments".to_string());
+        }
+
+        let src = args[0].to_i256();
+        let mask = args[1].to_i256();
+        let k = args[2].to_u64() as u8;
+
+        let result = unsafe { _mm256_mask_expand_epi64(src, k, mask) };
+        Ok(self.m256i_to_argument(result))
+    }
+
+    fn m256i_to_argument(&self, value: __m256i) -> Argument {
+        let array: [i32; 8] = unsafe { std::mem::transmute(value) };
+        Argument::Array(AType::DoubleWord, array.iter().map(|&x| x as u64).collect())
     }
 }
 
@@ -173,7 +306,7 @@ pub fn parse_input(input: &str) -> Result<AST, String> {
             match parse_call(value_input) {
                 Ok(ast) => Ok(AST::Assign {
                     dest,
-                    child: Box::new(ast)
+                    child: Box::new(ast),
                 }),
                 Err(e) => Err(e),
             }
@@ -181,7 +314,7 @@ pub fn parse_input(input: &str) -> Result<AST, String> {
             match parse_argument(value_input) {
                 Ok(arg) => Ok(AST::Var {
                     name: dest,
-                    value: arg
+                    value: arg,
                 }),
                 Err(e) => Err(e),
             }
@@ -278,14 +411,17 @@ fn parse_array(input: &str) -> Result<Argument, String> {
         return Ok(Argument::Array(atype, Vec::new()));
     }
 
-    let values = values_str.split(',')
+    let values = values_str
+        .split(',')
         .map(|s| s.trim())
         .filter(|s| !s.is_empty())
         .map(parse_number)
-        .map(|r| r.and_then(|arg| match arg {
-            Argument::Scalar(val) => Ok(val),
-            _ => Err("Array values must be scalar numbers".to_string()),
-        }))
+        .map(|r| {
+            r.and_then(|arg| match arg {
+                Argument::Scalar(val) => Ok(val),
+                _ => Err("Array values must be scalar numbers".to_string()),
+            })
+        })
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(Argument::Array(atype, values))
@@ -317,7 +453,8 @@ fn parse_number(input: &str) -> Result<Argument, String> {
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid binary number: {}", input))
     } else {
-        input.parse::<u64>()
+        input
+            .parse::<u64>()
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid decimal number: {}", input))
     }

@@ -1,6 +1,6 @@
 mod simple_parser;
 
-use simple_parser::{parse_input, Interpreter};
+use simple_parser::{Interpreter, parse_input};
 
 #[cfg(test)]
 mod tests;
@@ -17,9 +17,11 @@ fn main() {
         std::io::stdout().flush().unwrap();
 
         let mut input = String::new();
-        std::io::stdin()
-            .read_line(&mut input)
-            .unwrap();
+        let read = std::io::stdin().read_line(&mut input).unwrap();
+
+        if read == 0 {
+            break;
+        }
 
         let input = input.trim();
         if input == "exit" {
@@ -31,10 +33,13 @@ fn main() {
         }
 
         match parse_input(input) {
-            Ok(ast) => match interpreter.execute(ast) {
-                Ok(result) => println!("{:?}", result),
-                Err(e) => println!("Error: {}", e),
-            },
+            Ok(ast) => {
+                println!("ast {:?}", ast);
+                match interpreter.execute(ast) {
+                    Ok(result) => println!("{:?}", result),
+                    Err(e) => println!("Error: {}", e),
+                }
+            }
             Err(e) => println!("Parse error: {}", e),
         }
     }
