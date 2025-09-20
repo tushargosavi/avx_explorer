@@ -211,31 +211,35 @@ fn parse_array(input: &str) -> Result<Argument, String> {
 
 fn parse_number(input: &str) -> Result<Argument, String> {
     if input.starts_with("0x") {
-        let hex_str = &input[2..];
-        if hex_str.is_empty() {
+        let cleaned = input[2..].replace('_', "");
+        if cleaned.is_empty() {
             return Err("Empty hex number".to_string());
         }
-        u64::from_str_radix(hex_str, 16)
+        u64::from_str_radix(&cleaned, 16)
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid hex number: {}", input))
     } else if input.starts_with("0o") {
-        let octal_str = &input[2..];
-        if octal_str.is_empty() {
+        let cleaned = input[2..].replace('_', "");
+        if cleaned.is_empty() {
             return Err("Empty octal number".to_string());
         }
-        u64::from_str_radix(octal_str, 8)
+        u64::from_str_radix(&cleaned, 8)
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid octal number: {}", input))
     } else if input.starts_with("0b") {
-        let binary_str = &input[2..];
-        if binary_str.is_empty() {
+        let cleaned = input[2..].replace('_', "");
+        if cleaned.is_empty() {
             return Err("Empty binary number".to_string());
         }
-        u64::from_str_radix(binary_str, 2)
+        u64::from_str_radix(&cleaned, 2)
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid binary number: {}", input))
     } else {
-        input
+        let cleaned = input.replace('_', "");
+        if cleaned.is_empty() {
+            return Err("Empty decimal number".to_string());
+        }
+        cleaned
             .parse::<u64>()
             .map(Argument::Scalar)
             .map_err(|_| format!("Invalid decimal number: {}", input))

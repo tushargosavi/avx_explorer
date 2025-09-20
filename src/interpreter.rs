@@ -1,4 +1,6 @@
 use crate::ast::*;
+use crate::avx2::register_avx2_instructions;
+use crate::bmi2::register_bmi2_instructions;
 use std::arch::x86_64::*;
 use std::collections::HashMap;
 
@@ -159,6 +161,11 @@ impl Interpreter {
                 Ok(m256i_to_argument(result))
             },
         ));
+
+        // Register AVX2 intrinsic-backed instructions
+        register_avx2_instructions(&mut registry);
+        // Register BMI2 intrinsic-backed instructions
+        register_bmi2_instructions(&mut registry);
 
         Self {
             variables: HashMap::new(),
