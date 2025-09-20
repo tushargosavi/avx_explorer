@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::ast::{AST, AType, Argument};
+    use crate::ast::{AST, ArgType, Argument};
     use crate::interpreter::Interpreter;
     use crate::parser::parse_input;
 
@@ -45,19 +45,19 @@ mod tests {
                 assert_eq!(args.len(), 2);
 
                 match &args[0] {
-                    Argument::Array(AType::Word, values) => {
+                    Argument::Array(ArgType::I256, values) => {
                         let expected_bytes = [0x23u8, 0x01u8, 0x56u8, 0x04u8];
                         assert_eq!(&values[..4], &expected_bytes);
                     }
-                    _ => panic!("Expected Word array"),
+                    _ => panic!("Expected I256 array"),
                 }
 
                 match &args[1] {
-                    Argument::Array(AType::QuadWord, values) => {
+                    Argument::Array(ArgType::I256, values) => {
                         let expected_bytes = [1u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 2u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 3u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 4u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8];
                         assert_eq!(&values[..32], &expected_bytes);
                     }
-                    _ => panic!("Expected QuadWord array"),
+                    _ => panic!("Expected I256 array"),
                 }
             }
             _ => panic!("Expected Call"),
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn test_argument_conversions() {
         let scalar = Argument::Scalar(0x123456789ABCDEF0);
-        let array = Argument::Array(AType::QuadWord, {
+        let array = Argument::Array(ArgType::I512, {
             let mut bytes = [0u8; 64];
             bytes[0] = 1;
             bytes[8] = 2;
@@ -222,19 +222,19 @@ mod tests {
                 assert_eq!(args.len(), 2);
 
                 match &args[0] {
-                    Argument::Array(AType::Word, values) => {
+                    Argument::Array(ArgType::I256, values) => {
                         let expected_bytes = [0x00u8, 0x00u8, 0x12u8, 0x00u8, 0x13u8, 0x00u8, 0x43u8, 0x00u8];
                         assert_eq!(&values[..8], &expected_bytes);
                     }
-                    _ => panic!("Expected Word array"),
+                    _ => panic!("Expected I256 array"),
                 }
 
                 match &args[1] {
-                    Argument::Array(AType::Word, values) => {
+                    Argument::Array(ArgType::I256, values) => {
                         let expected_bytes = [0xFFu8, 0x00u8, 0x01u8, 0x00u8, 0xFFu8, 0x00u8, 0x83u8, 0x00u8];
                         assert_eq!(&values[..8], &expected_bytes);
                     }
-                    _ => panic!("Expected Word array"),
+                    _ => panic!("Expected I256 array"),
                 }
             }
             _ => panic!("Expected Call"),
@@ -254,11 +254,11 @@ mod tests {
                 assert_eq!(args.len(), 1);
 
                 match &args[0] {
-                    Argument::Array(AType::Bit, values) => {
+                    Argument::Array(ArgType::I512, values) => {
                         // bits[1,0,1] should become 0b101 = 5 in little endian
                         assert_eq!((*values)[0], 0b101);
                     }
-                    _ => panic!("Expected Bit array"),
+                    _ => panic!("Expected I512 array"),
                 }
             }
             _ => panic!("Expected Call"),
@@ -278,13 +278,13 @@ mod tests {
                 assert_eq!(args.len(), 1);
 
                 match &args[0] {
-                    Argument::Array(AType::Bit, values) => {
+                    Argument::Array(ArgType::I512, values) => {
                         // bits[1,0,1,1,0,0,1,0] should become 0b01001101 = 0x4D in little endian
                         // bits[1,0] should become 0b01 = 1 in little endian
                         assert_eq!((*values)[0], 0b01001101);
                         assert_eq!((*values)[1], 0b01);
                     }
-                    _ => panic!("Expected Bit array"),
+                    _ => panic!("Expected I512 array"),
                 }
             }
             _ => panic!("Expected Call"),

@@ -120,17 +120,13 @@ impl Interpreter {
     fn display_argument(&self, arg: &Argument) {
         match arg {
             Argument::Scalar(val) => println!("{}", val),
-            Argument::Array(atype, bytes) => match atype {
-                AType::Bit => {
-                    let bit_count = bytes.iter().map(|&b| b.count_ones()).sum::<u32>();
-                    println!("bits[{} bits]", bit_count);
-                }
-                AType::Byte => {
+            Argument::Array(arg_type, bytes) => match arg_type {
+                ArgType::U8 => {
                     let values_str: Vec<String> =
                         bytes.iter().take(32).map(|v| v.to_string()).collect();
                     println!("b[{}]", values_str.join(", "));
                 }
-                AType::Word => {
+                ArgType::U16 => {
                     let words: Vec<u16> = bytes
                         .chunks(2)
                         .map(|chunk| u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]))
@@ -139,7 +135,7 @@ impl Interpreter {
                     let values_str: Vec<String> = words.iter().map(|v| v.to_string()).collect();
                     println!("w[{}]", values_str.join(", "));
                 }
-                AType::DoubleWord => {
+                ArgType::U32 => {
                     let dwords: Vec<u32> = bytes
                         .chunks(4)
                         .map(|chunk| {
@@ -155,7 +151,7 @@ impl Interpreter {
                     let values_str: Vec<String> = dwords.iter().map(|v| v.to_string()).collect();
                     println!("dw[{}]", values_str.join(", "));
                 }
-                AType::QuadWord => {
+                ArgType::U64 => {
                     let qwords: Vec<u64> = bytes
                         .chunks(8)
                         .map(|chunk| {
@@ -174,6 +170,51 @@ impl Interpreter {
                         .collect();
                     let values_str: Vec<String> = qwords.iter().map(|v| v.to_string()).collect();
                     println!("qw[{}]", values_str.join(", "));
+                }
+                ArgType::I256 => {
+                    let dwords: Vec<u32> = bytes
+                        .chunks(4)
+                        .map(|chunk| {
+                            u32::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                            ])
+                        })
+                        .take(8)
+                        .collect();
+                    let values_str: Vec<String> = dwords.iter().map(|v| v.to_string()).collect();
+                    println!("i256[{}]", values_str.join(", "));
+                }
+                ArgType::I512 => {
+                    let qwords: Vec<u64> = bytes
+                        .chunks(8)
+                        .map(|chunk| {
+                            u64::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                                *chunk.get(4).unwrap_or(&0),
+                                *chunk.get(5).unwrap_or(&0),
+                                *chunk.get(6).unwrap_or(&0),
+                                *chunk.get(7).unwrap_or(&0),
+                            ])
+                        })
+                        .take(8)
+                        .collect();
+                    let values_str: Vec<String> = qwords.iter().map(|v| v.to_string()).collect();
+                    println!("i512[{}]", values_str.join(", "));
+                }
+                ArgType::Ptr => {
+                    println!(
+                        "ptr[0x{:016x}]",
+                        u64::from_le_bytes([
+                            bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6],
+                            bytes[7]
+                        ])
+                    );
                 }
             },
             Argument::Variable(name) => {
@@ -250,6 +291,6 @@ impl Interpreter {
             let start = i * 4;
             bytes[start..start + 4].copy_from_slice(&val_bytes);
         }
-        Argument::Array(AType::DoubleWord, bytes)
+        Argument::Array(ArgType::I256, bytes)
     }
 }

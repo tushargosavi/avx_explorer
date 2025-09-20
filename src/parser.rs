@@ -1,5 +1,3 @@
-use std::collections::hash_map::Values;
-
 use crate::ast::*;
 
 pub fn parse_input(input: &str) -> Result<AST, String> {
@@ -113,23 +111,14 @@ fn parse_array(input: &str) -> Result<Argument, String> {
     let open_bracket = input.find('[').ok_or("Missing opening bracket")?;
     let array_type = &input[..open_bracket];
 
-    let atype = match array_type {
-        "bits" => AType::Bit,
-        "b" => AType::Byte,
-        "w" => AType::Word,
-        "dw" => AType::DoubleWord,
-        "qw" => AType::QuadWord,
-        _ => return Err(format!("Unknown array type: {}", array_type)),
-    };
-
     let values_str = &input[open_bracket + 1..input.len() - 1];
 
     if values_str.trim().is_empty() {
-        return Ok(Argument::Array(atype, [0u8; 64]));
+        return Ok(Argument::Array(ArgType::U64, [0u8; 64]));
     }
 
-    match atype {
-        AType::Bit => {
+    match array_type {
+        "bits" => {
             let values: Vec<u64> = values_str
                 .split(',')
                 .map(|s| s.trim())
@@ -149,7 +138,7 @@ fn parse_array(input: &str) -> Result<Argument, String> {
                         bytes[byte_index] |= 1 << bit_index;
                     }
                 }
-                Ok(Argument::Array(atype, bytes))
+                Ok(Argument::Array(ArgType::I512, bytes))
             } else {
                 let mut current_byte = 0u8;
                 let mut byte_index = 0;
@@ -168,10 +157,10 @@ fn parse_array(input: &str) -> Result<Argument, String> {
                 if byte_index < 64 {
                     bytes[byte_index] = current_byte;
                 }
-                Ok(Argument::Array(atype, bytes))
+                Ok(Argument::Array(ArgType::I512, bytes))
             }
         }
-        a_type => {
+        "b" | "w" | "dw" | "qw" => {
             let values = values_str
                 .split(',')
                 .map(|s| s.trim())
@@ -185,36 +174,38 @@ fn parse_array(input: &str) -> Result<Argument, String> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
+            let arg_type = ArgType::from_value_count(&values);
             let mut rbytes = [0u8; 64];
 
-            match a_type {
-                AType::Byte => {
+            match array_type {
+                "b" => {
                     for (i, &val) in values.iter().take(64).enumerate() {
                         rbytes[i] = val as u8;
                     }
                 }
-                AType::Word => {
+                "w" => {
                     for (i, &val) in values.iter().take(32).enumerate() {
                         let bytes = (val as u16).to_le_bytes();
                         rbytes[i * 2..i * 2 + 2].copy_from_slice(&bytes);
                     }
                 }
-                AType::DoubleWord => {
-                    for (i, &val) in values.iter().take(32).enumerate() {
+                "dw" => {
+                    for (i, &val) in values.iter().take(16).enumerate() {
                         let bytes = (val as u32).to_le_bytes();
                         rbytes[i * 4..i * 4 + 4].copy_from_slice(&bytes);
                     }
                 }
-                AType::QuadWord => {
-                    for (i, &val) in values.iter().take(32).enumerate() {
+                "qw" => {
+                    for (i, &val) in values.iter().take(8).enumerate() {
                         let bytes = val.to_le_bytes();
                         rbytes[i * 8..i * 8 + 8].copy_from_slice(&bytes);
                     }
                 }
-                _ => {}
+                _ => unreachable!(),
             }
-            Ok(Argument::Array(a_type, rbytes))
+            Ok(Argument::Array(arg_type, rbytes))
         }
+        _ => return Err(format!("Unknown array type: {}", array_type)),
     }
 }
 

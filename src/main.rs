@@ -38,7 +38,7 @@ fn main() {
 
         match parse_input(input) {
             Ok(ast) => {
-                println!("ast {:?}", ast);
+                //println!("ast {:?}", ast);
                 match interpreter.execute(ast) {
                     Ok(result) => println!("{:?}", result),
                     Err(e) => println!("Error: {}", e),
