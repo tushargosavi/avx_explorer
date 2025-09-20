@@ -1,4 +1,5 @@
 use std::arch::x86_64::*;
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum AType {
@@ -20,35 +21,73 @@ pub enum ArgType {
     Ptr,
 }
 
-#[derive(Debug)]
-pub struct FunctionInfo {
-    pub name: String,
-    pub arguments: Vec<ArgType>,
-    pub return_type: ArgType,
+pub trait FunctionInfo {
+    fn name(&self) -> &str;
+    fn arguments(&self) -> &[ArgType];
+    fn return_type(&self) -> ArgType;
+    fn execute(&self, args: &[Argument]) -> Result<Argument, String>;
 }
 
 #[derive(Debug)]
+pub struct Instruction {
+    pub name: String,
+    pub arguments: Vec<ArgType>,
+    pub return_type: ArgType,
+    pub exec: fn(&[Argument]) -> Result<Argument, String>,
+}
+
+impl Instruction {
+    pub fn new(
+        name: &str,
+        arguments: Vec<ArgType>,
+        return_type: ArgType,
+        exec: fn(&[Argument]) -> Result<Argument, String>,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            arguments,
+            return_type,
+            exec,
+        }
+    }
+}
+
+impl FunctionInfo for Instruction {
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    fn arguments(&self) -> &[ArgType] {
+        &self.arguments
+    }
+
+    fn return_type(&self) -> ArgType {
+        self.return_type.clone()
+    }
+
+    fn execute(&self, args: &[Argument]) -> Result<Argument, String> {
+        (self.exec)(args)
+    }
+}
+
 pub struct FunctionRegistry {
-    pub functions: Vec<FunctionInfo>,
+    pub functions: HashMap<String, Box<dyn FunctionInfo>>,
 }
 
 impl FunctionRegistry {
     pub fn new() -> Self {
         Self {
-            functions: Vec::new(),
+            functions: HashMap::new(),
         }
     }
 
-    pub fn register(&mut self, name: &str, arguments: Vec<ArgType>, return_type: ArgType) {
-        self.functions.push(FunctionInfo {
-            name: name.to_string(),
-            arguments,
-            return_type,
-        });
+    pub fn register_instruction(&mut self, instruction: Instruction) {
+        self.functions
+            .insert(instruction.name.clone(), Box::new(instruction));
     }
 
-    pub fn find(&self, name: &str) -> Option<&FunctionInfo> {
-        self.functions.iter().find(|f| f.name == name)
+    pub fn find(&self, name: &str) -> Option<&dyn FunctionInfo> {
+        self.functions.get(name).map(|b| b.as_ref())
     }
 }
 
@@ -56,8 +95,8 @@ impl ArgType {
     pub fn from_value_count(values: &[u64]) -> Self {
         match values.len() {
             1 => ArgType::U64,
-            2..=8 => ArgType::I256,  // 256 bits can hold 8 u32 values or 4 u64 values
-            _ => ArgType::I512,    // 512 bits for larger arrays
+            2..=8 => ArgType::I256, // 256 bits can hold 8 u32 values or 4 u64 values
+            _ => ArgType::I512,     // 512 bits for larger arrays
         }
     }
 
@@ -92,30 +131,28 @@ pub enum AST {
 impl Argument {
     pub fn to_i256(&self) -> __m256i {
         match self {
-            Argument::Array(arg_type, bytes) => {
-                match arg_type {
-                    ArgType::I256 => {
-                        let mut result = [0i32; 8];
-                        for i in 0..8 {
-                            let start = i * 4;
-                            if start + 4 <= bytes.len() {
-                                result[i] = i32::from_le_bytes([
-                                    bytes[start],
-                                    bytes[start + 1],
-                                    bytes[start + 2],
-                                    bytes[start + 3],
-                                ]);
-                            }
+            Argument::Array(arg_type, bytes) => match arg_type {
+                ArgType::I256 => {
+                    let mut result = [0i32; 8];
+                    for i in 0..8 {
+                        let start = i * 4;
+                        if start + 4 <= bytes.len() {
+                            result[i] = i32::from_le_bytes([
+                                bytes[start],
+                                bytes[start + 1],
+                                bytes[start + 2],
+                                bytes[start + 3],
+                            ]);
                         }
-                        unsafe { std::mem::transmute(result) }
                     }
-                    _ => {
-                        let mut result = [0i32; 8];
-                        result[0] = self.to_u32() as i32;
-                        unsafe { std::mem::transmute(result) }
-                    }
+                    unsafe { std::mem::transmute(result) }
                 }
-            }
+                _ => {
+                    let mut result = [0i32; 8];
+                    result[0] = self.to_u32() as i32;
+                    unsafe { std::mem::transmute(result) }
+                }
+            },
             Argument::Scalar(val) => {
                 let mut result = [0i32; 8];
                 result[0] = *val as i32;
@@ -127,34 +164,32 @@ impl Argument {
 
     pub fn to_i512(&self) -> __m512i {
         match self {
-            Argument::Array(arg_type, bytes) => {
-                match arg_type {
-                    ArgType::I512 => {
-                        let mut result = [0i64; 8];
-                        for i in 0..8 {
-                            let start = i * 8;
-                            if start + 8 <= bytes.len() {
-                                result[i] = i64::from_le_bytes([
-                                    bytes[start],
-                                    bytes[start + 1],
-                                    bytes[start + 2],
-                                    bytes[start + 3],
-                                    bytes[start + 4],
-                                    bytes[start + 5],
-                                    bytes[start + 6],
-                                    bytes[start + 7],
-                                ]);
-                            }
+            Argument::Array(arg_type, bytes) => match arg_type {
+                ArgType::I512 => {
+                    let mut result = [0i64; 8];
+                    for i in 0..8 {
+                        let start = i * 8;
+                        if start + 8 <= bytes.len() {
+                            result[i] = i64::from_le_bytes([
+                                bytes[start],
+                                bytes[start + 1],
+                                bytes[start + 2],
+                                bytes[start + 3],
+                                bytes[start + 4],
+                                bytes[start + 5],
+                                bytes[start + 6],
+                                bytes[start + 7],
+                            ]);
                         }
-                        unsafe { std::mem::transmute(result) }
                     }
-                    _ => {
-                        let mut result = [0i64; 8];
-                        result[0] = self.to_u64() as i64;
-                        unsafe { std::mem::transmute(result) }
-                    }
+                    unsafe { std::mem::transmute(result) }
                 }
-            }
+                _ => {
+                    let mut result = [0i64; 8];
+                    result[0] = self.to_u64() as i64;
+                    unsafe { std::mem::transmute(result) }
+                }
+            },
             Argument::Scalar(val) => {
                 let mut result = [0i64; 8];
                 result[0] = *val as i64;
