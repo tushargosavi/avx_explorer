@@ -39,6 +39,50 @@ impl Interpreter {
             Ok(Argument::Scalar(0))
         }));
 
+        // print_hex(value [, chunk_bits]) where chunk_bits in {8,16,32,64}; default 32
+        registry.register_instruction(Instruction::new(
+            "print_hex",
+            vec![],
+            ArgType::U64,
+            |args| {
+                let (value_arg, chunk_bits_opt) = match args.len() {
+                    0 => return Err("print_hex requires at least 1 argument".to_string()),
+                    1 => (&args[0], None),
+                    _ => (&args[0], Some(args[1].to_u64())),
+                };
+                print_hex(value_arg, chunk_bits_opt)?;
+                Ok(Argument::Scalar(0))
+            },
+        ));
+
+        // print_dec(value)
+        registry.register_instruction(Instruction::new(
+            "print_dec",
+            vec![],
+            ArgType::U64,
+            |args| {
+                if args.is_empty() {
+                    return Err("print_dec requires 1 argument".to_string());
+                }
+                print_dec(&args[0])?;
+                Ok(Argument::Scalar(0))
+            },
+        ));
+
+        // print_bin(value)
+        registry.register_instruction(Instruction::new(
+            "print_bin",
+            vec![],
+            ArgType::U64,
+            |args| {
+                if args.is_empty() {
+                    return Err("print_bin requires 1 argument".to_string());
+                }
+                print_bin(&args[0])?;
+                Ok(Argument::Scalar(0))
+            },
+        ));
+
         registry.register_instruction(Instruction::new(
             "_mm256_mask_expand_epi8",
             vec![ArgType::I256, ArgType::I256, ArgType::U8],
@@ -270,4 +314,230 @@ fn display_argument_simple(arg: &Argument) {
         }
         Argument::Memory(bytes) => println!("memory[{} bytes]", bytes.len()),
     }
+}
+
+fn valid_len_for_array(arg_type: &ArgType) -> usize {
+    match arg_type {
+        ArgType::I256 => 32,
+        ArgType::I512 => 64,
+        // Treat typed arrays as full 64 bytes
+        ArgType::U8 | ArgType::U16 | ArgType::U32 | ArgType::U64 => 64,
+        ArgType::Ptr => 8,
+    }
+}
+
+fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> {
+    let chunk_bits = chunk_bits_opt.unwrap_or(32);
+    if !matches!(chunk_bits, 8 | 16 | 32 | 64) {
+        return Err("chunk_bits must be one of 8, 16, 32, 64".to_string());
+    }
+    match arg {
+        Argument::Scalar(v) => {
+            println!("0x{:016x}", v);
+        }
+        Argument::Array(arg_type, bytes) => {
+            let valid = valid_len_for_array(arg_type);
+            let data = &bytes[..valid.min(bytes.len())];
+            match chunk_bits {
+                8 => {
+                    let mut out = String::new();
+                    for b in data.iter() {
+                        out.push_str(&format!("0x{:02x} ", b));
+                    }
+                    println!("{}", out.trim_end());
+                }
+                16 => {
+                    for chunk in data.chunks_exact(2) {
+                        let v = u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]);
+                        print!("0x{:04x} ", v);
+                    }
+                    println!("");
+                }
+                32 => {
+                    for chunk in data.chunks_exact(4) {
+                        let v = u32::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                        ]);
+                        print!("0x{:08x} ", v);
+                    }
+                    println!("");
+                }
+                64 => {
+                    for chunk in data.chunks_exact(8) {
+                        let v = u64::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                            *chunk.get(4).unwrap_or(&0),
+                            *chunk.get(5).unwrap_or(&0),
+                            *chunk.get(6).unwrap_or(&0),
+                            *chunk.get(7).unwrap_or(&0),
+                        ]);
+                        print!("0x{:016x} ", v);
+                    }
+                    println!("");
+                }
+                _ => unreachable!(),
+            }
+        }
+        Argument::Variable(_) => unreachable!("variables are resolved before execute"),
+        Argument::Memory(bytes) => {
+            for b in bytes.iter() {
+                print!("0x{:02x} ", b);
+            }
+            println!("");
+        }
+    }
+    Ok(())
+}
+
+fn print_dec(arg: &Argument) -> Result<(), String> {
+    match arg {
+        Argument::Scalar(v) => {
+            println!("{}", v);
+        }
+        Argument::Array(arg_type, bytes) => {
+            let valid = valid_len_for_array(arg_type);
+            let data = &bytes[..valid.min(bytes.len())];
+            let chunk_bits = match arg_type {
+                ArgType::U8 => 8,
+                ArgType::U16 => 16,
+                ArgType::U32 => 32,
+                ArgType::U64 => 64,
+                ArgType::I256 => 32,
+                ArgType::I512 => 64,
+                ArgType::Ptr => 64,
+            };
+            match chunk_bits {
+                8 => {
+                    for b in data.iter() {
+                        print!("{} ", *b);
+                    }
+                    println!("");
+                }
+                16 => {
+                    for chunk in data.chunks_exact(2) {
+                        let v = u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]);
+                        print!("{} ", v);
+                    }
+                    println!("");
+                }
+                32 => {
+                    for chunk in data.chunks_exact(4) {
+                        let v = u32::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                        ]);
+                        print!("{} ", v);
+                    }
+                    println!("");
+                }
+                64 => {
+                    for chunk in data.chunks_exact(8) {
+                        let v = u64::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                            *chunk.get(4).unwrap_or(&0),
+                            *chunk.get(5).unwrap_or(&0),
+                            *chunk.get(6).unwrap_or(&0),
+                            *chunk.get(7).unwrap_or(&0),
+                        ]);
+                        print!("{} ", v);
+                    }
+                    println!("");
+                }
+                _ => unreachable!(),
+            }
+        }
+        Argument::Variable(_) => unreachable!("variables are resolved before execute"),
+        Argument::Memory(bytes) => {
+            for b in bytes.iter() {
+                print!("{} ", *b);
+            }
+            println!("");
+        }
+    }
+    Ok(())
+}
+
+fn print_bin(arg: &Argument) -> Result<(), String> {
+    match arg {
+        Argument::Scalar(v) => {
+            println!("{:064b}", v);
+        }
+        Argument::Array(arg_type, bytes) => {
+            let valid = valid_len_for_array(arg_type);
+            let data = &bytes[..valid.min(bytes.len())];
+            // Use natural chunking similar to decimal
+            let chunk_bits = match arg_type {
+                ArgType::U8 => 8,
+                ArgType::U16 => 16,
+                ArgType::U32 => 32,
+                ArgType::U64 => 64,
+                ArgType::I256 => 32,
+                ArgType::I512 => 64,
+                ArgType::Ptr => 64,
+            };
+            match chunk_bits {
+                8 => {
+                    for b in data.iter() {
+                        print!("{:08b} ", b);
+                    }
+                    println!("");
+                }
+                16 => {
+                    for chunk in data.chunks_exact(2) {
+                        let v = u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]);
+                        print!("{:016b} ", v);
+                    }
+                    println!("");
+                }
+                32 => {
+                    for chunk in data.chunks_exact(4) {
+                        let v = u32::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                        ]);
+                        print!("{:032b} ", v);
+                    }
+                    println!("");
+                }
+                64 => {
+                    for chunk in data.chunks_exact(8) {
+                        let v = u64::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                            *chunk.get(4).unwrap_or(&0),
+                            *chunk.get(5).unwrap_or(&0),
+                            *chunk.get(6).unwrap_or(&0),
+                            *chunk.get(7).unwrap_or(&0),
+                        ]);
+                        print!("{:064b} ", v);
+                    }
+                    println!("");
+                }
+                _ => unreachable!(),
+            }
+        }
+        Argument::Variable(_) => unreachable!("variables are resolved before execute"),
+        Argument::Memory(bytes) => {
+            for b in bytes.iter() {
+                print!("{:08b} ", b);
+            }
+            println!("");
+        }
+    }
+    Ok(())
 }
