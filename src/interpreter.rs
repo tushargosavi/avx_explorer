@@ -33,6 +33,9 @@ impl Interpreter {
             ArgType::I256,
         );
 
+        // Register print function (variable arguments)
+        registry.register("print", vec![], ArgType::U64);
+
         Self {
             variables: HashMap::new(),
             function_registry: registry,
@@ -40,7 +43,7 @@ impl Interpreter {
     }
 
     pub fn execute(&mut self, ast: AST) -> Result<Argument, String> {
-        match ast {
+        let result = match ast {
             AST::Call { name, args } => self.execute_call(name, args),
             AST::Var { name, value } => {
                 self.variables.insert(name.clone(), value.clone());
@@ -51,7 +54,14 @@ impl Interpreter {
                 self.variables.insert(dest, result.clone());
                 Ok(result)
             }
+        };
+
+        // Store result in _res for all statements
+        if let Ok(ref result) = result {
+            self.variables.insert("_res".to_string(), result.clone());
         }
+
+        result
     }
 
     fn execute_call(&mut self, name: String, args: Vec<Argument>) -> Result<Argument, String> {
@@ -67,10 +77,10 @@ impl Interpreter {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-        println!("Resolved arguments: {:?}", resolved_args);
         match name.as_str() {
             "add" => self.execute_add(&resolved_args),
             "test" => Ok(Argument::Scalar(42)),
+            "print" => self.execute_print(&resolved_args),
             "_mm256_mask_expand_epi8" => self.execute_mm256_mask_expand_epi8(&resolved_args),
             "_mm256_mask_expand_epi16" => self.execute_mm256_mask_expand_epi16(&resolved_args),
             "_mm256_mask_expand_epi32" => self.execute_mm256_mask_expand_epi32(&resolved_args),
@@ -90,16 +100,57 @@ impl Interpreter {
         Ok(Argument::Scalar(a + b))
     }
 
+    fn execute_print(&self, args: &[Argument]) -> Result<Argument, String> {
+        if args.is_empty() {
+            // Print _res variable by default
+            if let Some(res_arg) = self.variables.get("_res") {
+                self.display_argument(res_arg);
+            } else {
+                println!("_res is undefined");
+            }
+        } else {
+            // Print each argument
+            for arg in args {
+                self.display_argument(arg);
+            }
+        }
+        Ok(Argument::Scalar(0)) // Return 0 as success
+    }
+
+    fn display_argument(&self, arg: &Argument) {
+        match arg {
+            Argument::Scalar(val) => println!("{}", val),
+            Argument::Array(atype, values) => {
+                let values_str: Vec<String> = values.iter().map(|v| v.to_string()).collect();
+                match atype {
+                    AType::Bit => println!("bits[{}]", values.len()),
+                    AType::Byte => println!("b[{}]", values_str.join(", ")),
+                    AType::Word => println!("w[{}]", values_str.join(", ")),
+                    AType::DoubleWord => println!("dw[{}]", values_str.join(", ")),
+                    AType::QuadWord => println!("qw[{}]", values_str.join(", ")),
+                }
+            }
+            Argument::Variable(name) => {
+                if let Some(var_arg) = self.variables.get(name) {
+                    self.display_argument(var_arg);
+                } else {
+                    println!("undefined variable: {}", name);
+                }
+            }
+            Argument::Memory(bytes) => println!("memory[{} bytes]", bytes.len()),
+        }
+    }
+
     fn execute_mm256_mask_expand_epi8(&self, args: &[Argument]) -> Result<Argument, String> {
         if args.len() != 3 {
             return Err("_mm256_mask_expand_epi8 requires exactly 3 arguments".to_string());
         }
 
         let src = args[0].to_i256();
-        let mask = args[1].to_i256();
-        let k = args[2].to_u8() as u32;
+        let k = args[1].to_u8() as u32;
+        let a = args[2].to_i256();
 
-        let result = unsafe { _mm256_mask_expand_epi8(src, k, mask) };
+        let result = unsafe { _mm256_mask_expand_epi8(src, k, a) };
         Ok(self.m256i_to_argument(result))
     }
 
@@ -110,10 +161,10 @@ impl Interpreter {
         }
 
         let src = args[0].to_i256();
-        let mask = args[1].to_i256();
-        let k = args[2].to_u16() as u16;
+        let k = args[1].to_u16();
+        let a = args[2].to_i256();
 
-        let result = unsafe { _mm256_mask_expand_epi16(src, k, mask) };
+        let result = unsafe { _mm256_mask_expand_epi16(src, k, a) };
         Ok(self.m256i_to_argument(result))
     }
 
@@ -123,10 +174,10 @@ impl Interpreter {
         }
 
         let src = args[0].to_i256();
-        let mask = args[1].to_i256();
-        let k = args[2].to_u32() as u8;
+        let k = args[1].to_u32() as u8;
+        let a = args[2].to_i256();
 
-        let result = unsafe { _mm256_mask_expand_epi32(src, k, mask) };
+        let result = unsafe { _mm256_mask_expand_epi32(src, k, a) };
         Ok(self.m256i_to_argument(result))
     }
 
@@ -136,10 +187,10 @@ impl Interpreter {
         }
 
         let src = args[0].to_i256();
-        let mask = args[1].to_i256();
-        let k = args[2].to_u64() as u8;
+        let k = args[1].to_u64() as u8;
+        let a = args[2].to_i256();
 
-        let result = unsafe { _mm256_mask_expand_epi64(src, k, mask) };
+        let result = unsafe { _mm256_mask_expand_epi64(src, k, a) };
         Ok(self.m256i_to_argument(result))
     }
 

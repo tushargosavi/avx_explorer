@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests {
-    use crate::simple_parser::{AST, AType, Argument, Interpreter, parse_input};
+    use crate::ast::{AST, AType, Argument};
+    use crate::interpreter::Interpreter;
+    use crate::parser::parse_input;
 
     #[test]
     fn test_parse_simple_function_call() {
@@ -124,23 +126,21 @@ mod tests {
         let scalar = Argument::Scalar(0x123456789ABCDEF0);
         let array = Argument::Array(AType::QuadWord, vec![1, 2, 3, 4, 5, 6, 7, 8]);
 
-        assert_eq!(scalar.to_u64(), Some(0x123456789ABCDEF0));
-        assert_eq!(scalar.to_u32(), Some(0x9ABCDEF0));
-        assert_eq!(scalar.to_u16(), Some(0xDEF0));
+        assert_eq!(scalar.to_u64(), 0x123456789ABCDEF0);
+        assert_eq!(scalar.to_u32(), 0x9ABCDEF0);
+        assert_eq!(scalar.to_u16(), 0xDEF0);
 
         let i256_result = scalar.to_i256();
-        assert!(i256_result.is_some());
-        let i256_array = i256_result.unwrap();
+        let i256_array: [i32; 8] = unsafe { std::mem::transmute(i256_result) };
         assert_eq!(i256_array[0] as u32, 0x9ABCDEF0u32);
 
         let i512_result = scalar.to_i512();
-        assert!(i512_result.is_some());
-        let i512_array = i512_result.unwrap();
+        let i512_array: [i64; 8] = unsafe { std::mem::transmute(i512_result) };
         assert_eq!(i512_array[0], 0x123456789ABCDEF0i64);
 
-        assert_eq!(array.to_u64(), Some(1));
-        assert_eq!(array.to_u32(), Some(1));
-        assert_eq!(array.to_u16(), Some(1));
+        assert_eq!(array.to_u64(), 1);
+        assert_eq!(array.to_u32(), 1);
+        assert_eq!(array.to_u16(), 1);
     }
 
     #[test]

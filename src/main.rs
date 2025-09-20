@@ -1,4 +1,5 @@
 mod ast;
+mod display;
 mod interpreter;
 mod parser;
 use parser::parse_input;
