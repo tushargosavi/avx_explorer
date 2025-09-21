@@ -3,6 +3,7 @@ mod tests {
     use crate::ast::{AST, ArgType, Argument};
     use crate::interpreter::Interpreter;
     use crate::parser::parse_input;
+    use std::convert::TryInto;
 
     #[test]
     fn test_parse_simple_function_call() {
@@ -197,6 +198,47 @@ mod tests {
         assert_eq!(array.to_u64(), 1);
         assert_eq!(array.to_u32(), 1);
         assert_eq!(array.to_u16(), 1);
+    }
+
+    #[test]
+    fn test_sse2_add_epi32() {
+        let mut interpreter = Interpreter::new();
+
+        let set_vec = AST::Call {
+            name: "_mm_set1_epi32".to_string(),
+            args: vec![Argument::Scalar(5)],
+        };
+        let vec_value = interpreter
+            .execute(set_vec)
+            .expect("_mm_set1_epi32 should execute");
+
+        match &vec_value {
+            Argument::Array(arg_type, bytes) => {
+                assert_eq!(*arg_type, ArgType::I128);
+                let slice: [u8; 16] = bytes[..16].try_into().unwrap();
+                let data: [i32; 4] = unsafe { std::mem::transmute(slice) };
+                assert!(data.iter().all(|v| *v == 5));
+            }
+            _ => panic!("Expected I128 array from _mm_set1_epi32"),
+        }
+
+        let add_ast = AST::Call {
+            name: "_mm_add_epi32".to_string(),
+            args: vec![vec_value.clone(), vec_value.clone()],
+        };
+        let result = interpreter
+            .execute(add_ast)
+            .expect("_mm_add_epi32 should execute");
+
+        match result {
+            Argument::Array(arg_type, bytes) => {
+                assert_eq!(arg_type, ArgType::I128);
+                let slice: [u8; 16] = bytes[..16].try_into().unwrap();
+                let data: [i32; 4] = unsafe { std::mem::transmute(slice) };
+                assert!(data.iter().all(|v| *v == 10));
+            }
+            other => panic!("Unexpected result: {:?}", other),
+        }
     }
 
     #[test]
