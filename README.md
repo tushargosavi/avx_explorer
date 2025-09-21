@@ -39,6 +39,18 @@ Run the interactive REPL:
 cargo run
 ```
 
+To execute commands from a file instead of using the REPL:
+
+```bash
+cargo run -- --file path/to/script.avx
+```
+
+You can also provide the file path directly:
+
+```bash
+cargo run -- path/to/script.avx
+```
+
 The simulator will start with a prompt where you can enter AVX2 instructions:
 
 ```
