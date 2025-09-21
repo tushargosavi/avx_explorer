@@ -1,6 +1,17 @@
 use crate::ast::{ArgType, Argument, FunctionRegistry, Instruction};
 use std::arch::x86_64::*;
 
+fn m128i_to_argument(value: __m128i) -> Argument {
+    let array: [i32; 4] = unsafe { std::mem::transmute(value) };
+    let mut bytes = [0u8; 64];
+    for (i, &val) in array.iter().enumerate() {
+        let val_bytes = val.to_le_bytes();
+        let start = i * 4;
+        bytes[start..start + 4].copy_from_slice(&val_bytes);
+    }
+    Argument::Array(ArgType::I128, bytes)
+}
+
 fn m256i_to_argument(value: __m256i) -> Argument {
     let array: [i32; 8] = unsafe { std::mem::transmute(value) };
     let mut bytes = [0u8; 64];
@@ -10,6 +21,15 @@ fn m256i_to_argument(value: __m256i) -> Argument {
         bytes[start..start + 4].copy_from_slice(&val_bytes);
     }
     Argument::Array(ArgType::I256, bytes)
+}
+
+#[inline]
+fn require_avx() -> Result<(), String> {
+    if !is_x86_feature_detected!("avx") {
+        Err("AVX not supported on this CPU/runtime".to_string())
+    } else {
+        Ok(())
+    }
 }
 
 #[inline]
@@ -77,6 +97,50 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             let v = args[0].to_u64() as i64;
             let res = unsafe { _mm256_set1_epi64x(v) };
             Ok(m256i_to_argument(res))
+        },
+    ));
+
+    // AVX intrinsics
+    registry.register_instruction(Instruction::new(
+        "_mm_set1_epi8",
+        vec![ArgType::U8],
+        ArgType::I128,
+        |_, args| {
+            require_avx()?;
+            if args.len() != 1 {
+                return Err("_mm_set1_epi8 requires 1 argument".to_string());
+            }
+            let v = args[0].to_u8() as i8;
+            let res = unsafe { _mm_set1_epi8(v) };
+            Ok(m128i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "_mm_cvtsi128_si64",
+        vec![ArgType::I128],
+        ArgType::U64,
+        |_, args| {
+            require_avx()?;
+            if args.len() != 1 {
+                return Err("_mm_cvtsi128_si64 requires 1 argument".to_string());
+            }
+            let a = args[0].to_i128();
+            let res = unsafe { _mm_cvtsi128_si64(a) } as u64;
+            Ok(Argument::ScalarTyped(ArgType::U64, res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "_mm_set1_epi64x",
+        vec![ArgType::U64],
+        ArgType::I128,
+        |_, args| {
+            require_avx()?;
+            if args.len() != 1 {
+                return Err("_mm_set1_epi64x requires 1 argument".to_string());
+            }
+            let v = args[0].to_u64() as i64;
+            let res = unsafe { _mm_set1_epi64x(v) };
+            Ok(m128i_to_argument(res))
         },
     ));
 
@@ -770,6 +834,63 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             let idx = args[1].to_i256();
             let res = unsafe { _mm256_permutevar8x32_epi32(a, idx) };
             Ok(m256i_to_argument(res))
+        },
+    ));
+
+    // AVX2 conversion and store operations
+    registry.register_instruction(Instruction::new(
+        "_mm256_cvtepi8_epi32",
+        vec![ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 1 {
+                return Err("_mm256_cvtepi8_epi32 requires 1 argument".to_string());
+            }
+            let a = args[0].to_i128();
+            let res = unsafe { _mm256_cvtepi8_epi32(a) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "_mm256_storeu_epi32",
+        vec![ArgType::Ptr, ArgType::I256],
+        ArgType::Ptr,
+        |ctx, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("_mm256_storeu_epi32 requires 2 arguments".to_string());
+            }
+
+            // Get the memory to store to
+            let mem_arg = match &args[0] {
+                Argument::Variable(name) => ctx.get_var(name).ok_or_else(|| format!("Undefined variable: {}", name))?,
+                Argument::Memory(_) => &args[0],
+                _ => return Err("_mm256_storeu_epi32 first argument must be a memory pointer".to_string()),
+            };
+
+            let memory = match mem_arg {
+                Argument::Memory(bytes) => bytes.clone(),
+                _ => return Err("_mm256_storeu_epi32 first argument must reference memory".to_string()),
+            };
+
+            let value = args[1].to_i256();
+            let value_bytes: [i32; 8] = unsafe { std::mem::transmute(value) };
+
+            // Ensure memory is large enough (32 bytes for 8 i32s)
+            let mut new_memory = memory;
+            if new_memory.len() < 32 {
+                new_memory.resize(32, 0);
+            }
+
+            // Store the 8 i32 values (little endian)
+            for i in 0..8 {
+                let offset = i * 4;
+                let bytes = value_bytes[i].to_le_bytes();
+                new_memory[offset..offset + 4].copy_from_slice(&bytes);
+            }
+
+            Ok(Argument::Memory(new_memory))
         },
     ));
 }

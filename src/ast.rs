@@ -144,7 +144,8 @@ impl ArgType {
     pub fn from_value_count(values: &[u64]) -> Self {
         match values.len() {
             1 => ArgType::U64,
-            2..=8 => ArgType::I256, // 256 bits can hold 8 u32 values or 4 u64 values
+            2 => ArgType::I128,    // 128 bits can hold 2 u64 values
+            3..=4 => ArgType::I256, // 256 bits can hold 4 u64 values or 8 u32 values
             _ => ArgType::I512,     // 512 bits for larger arrays
         }
     }
@@ -248,21 +249,28 @@ impl AST {
 impl Argument {
     pub fn to_i128(&self) -> __m128i {
         match self {
-            Argument::Array(_, bytes) => {
-                let mut result = [0i32; 4];
-                for i in 0..4 {
-                    let start = i * 4;
-                    if start + 4 <= bytes.len() {
-                        result[i] = i32::from_le_bytes([
-                            bytes[start],
-                            bytes[start + 1],
-                            bytes[start + 2],
-                            bytes[start + 3],
-                        ]);
+            Argument::Array(arg_type, bytes) => match arg_type {
+                ArgType::I128 => {
+                    let mut result = [0i32; 4];
+                    for i in 0..4 {
+                        let start = i * 4;
+                        if start + 4 <= bytes.len() {
+                            result[i] = i32::from_le_bytes([
+                                bytes[start],
+                                bytes[start + 1],
+                                bytes[start + 2],
+                                bytes[start + 3],
+                            ]);
+                        }
                     }
+                    unsafe { std::mem::transmute(result) }
                 }
-                unsafe { std::mem::transmute(result) }
-            }
+                _ => {
+                    let mut result = [0i32; 4];
+                    result[0] = self.to_u32() as i32;
+                    unsafe { std::mem::transmute(result) }
+                }
+            },
             Argument::Scalar(val) => {
                 let mut result = [0i32; 4];
                 result[0] = *val as i32;

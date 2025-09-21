@@ -99,7 +99,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
     // _bzhi_u64(src, index) -> u64
     registry.register_instruction(Instruction::new(
         "_bzhi_u64",
-        vec![ArgType::U64, ArgType::U32],
+        vec![ArgType::U64, ArgType::U64],
         ArgType::U64,
         |_, args| {
             require_bmi2()?;
