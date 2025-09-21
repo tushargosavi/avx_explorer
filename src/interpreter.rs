@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::avx_512::register_avx512_instructions;
 use crate::avx2::register_avx2_instructions;
 use crate::bmi2::register_bmi2_instructions;
 use std::arch::x86_64::*;
@@ -225,6 +226,8 @@ impl Interpreter {
 
         // Register AVX2 intrinsic-backed instructions
         register_avx2_instructions(&mut registry);
+        // Register AVX-512 intrinsic-backed instructions
+        register_avx512_instructions(&mut registry);
         // Register BMI2 intrinsic-backed instructions
         register_bmi2_instructions(&mut registry);
 
