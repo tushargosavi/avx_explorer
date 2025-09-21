@@ -26,18 +26,30 @@ impl Interpreter {
             },
         ));
 
-        registry.register_instruction(Instruction::new("test", vec![], ArgType::U64, |_, args| {
-            if let Some(first) = args.get(0) {
-                Ok(first.clone())
-            } else {
-                Ok(Argument::Scalar(42))
-            }
-        }));
+        registry.register_instruction(Instruction::with_arg_range(
+            "test",
+            vec![],
+            ArgType::U64,
+            0,
+            Some(1),
+            |_, args| {
+                if args.len() > 1 {
+                    return Err("test accepts at most 1 argument".to_string());
+                }
+                if let Some(first) = args.get(0) {
+                    Ok(first.clone())
+                } else {
+                    Ok(Argument::Scalar(42))
+                }
+            },
+        ));
 
-        registry.register_instruction(Instruction::new(
+        registry.register_instruction(Instruction::with_arg_range(
             "print",
             vec![],
             ArgType::U64,
+            0,
+            None,
             |ctx, args| {
                 if args.is_empty() {
                     if let Some(res) = ctx.get_var("_res") {
@@ -55,11 +67,16 @@ impl Interpreter {
         ));
 
         // print_hex(value [, chunk_bits]) where chunk_bits in {8,16,32,64}; default 32
-        registry.register_instruction(Instruction::new(
+        registry.register_instruction(Instruction::with_arg_range(
             "print_hex",
-            vec![],
+            vec![ArgType::U64, ArgType::U64],
             ArgType::U64,
+            1,
+            Some(2),
             |_, args| {
+                if args.len() > 2 {
+                    return Err("print_hex accepts at most 2 arguments".to_string());
+                }
                 let (value_arg, chunk_bits_opt) = match args.len() {
                     0 => return Err("print_hex requires at least 1 argument".to_string()),
                     1 => (&args[0], None),
@@ -73,11 +90,11 @@ impl Interpreter {
         // print_dec(value)
         registry.register_instruction(Instruction::new(
             "print_dec",
-            vec![],
+            vec![ArgType::U64],
             ArgType::U64,
             |_, args| {
-                if args.is_empty() {
-                    return Err("print_dec requires 1 argument".to_string());
+                if args.len() != 1 {
+                    return Err("print_dec requires exactly 1 argument".to_string());
                 }
                 print_dec(&args[0])?;
                 Ok(Argument::Scalar(0))
@@ -87,11 +104,11 @@ impl Interpreter {
         // print_bin(value)
         registry.register_instruction(Instruction::new(
             "print_bin",
-            vec![],
+            vec![ArgType::U64],
             ArgType::U64,
             |_, args| {
-                if args.is_empty() {
-                    return Err("print_bin requires 1 argument".to_string());
+                if args.len() != 1 {
+                    return Err("print_bin requires exactly 1 argument".to_string());
                 }
                 print_bin(&args[0])?;
                 Ok(Argument::Scalar(0))
@@ -153,30 +170,36 @@ impl Interpreter {
             ArgType::I256,
             |ctx, args| {
                 if !(is_x86_feature_detected!("avx512f") && is_x86_feature_detected!("avx512vl")) {
-                    return Err("AVX-512F and AVX-512VL not supported on this CPU/runtime".to_string());
+                    return Err(
+                        "AVX-512F and AVX-512VL not supported on this CPU/runtime".to_string()
+                    );
                 }
                 if args.len() != 3 {
-                    return Err("_mm256_mask_expandloadu_epi32 requires exactly 3 arguments".to_string());
+                    return Err(
+                        "_mm256_mask_expandloadu_epi32 requires exactly 3 arguments".to_string()
+                    );
                 }
                 let src = args[0].to_i256();
                 let mask = args[1].to_u8();
 
                 // Resolve memory pointer
                 let mem_ptr: *const i32 = match &args[2] {
-                    Argument::Variable(name) => {
-                        match ctx.get_var(name.as_str()) {
-                            Some(Argument::Memory(bytes)) => bytes.as_ptr() as *const i32,
-                            Some(other) => {
-                                return Err(format!(
-                                    "Pointer '{}' does not reference memory, found {:?}",
-                                    name, other
-                                ))
-                            }
-                            None => return Err(format!("Undefined pointer variable: {}", name)),
+                    Argument::Variable(name) => match ctx.get_var(name.as_str()) {
+                        Some(Argument::Memory(bytes)) => bytes.as_ptr() as *const i32,
+                        Some(other) => {
+                            return Err(format!(
+                                "Pointer '{}' does not reference memory, found {:?}",
+                                name, other
+                            ));
                         }
-                    }
+                        None => return Err(format!("Undefined pointer variable: {}", name)),
+                    },
                     Argument::Memory(bytes) => bytes.as_ptr() as *const i32,
-                    _ => return Err("Pointer argument must be a memory variable or mem[...]".to_string()),
+                    _ => {
+                        return Err(
+                            "Pointer argument must be a memory variable or mem[...]".to_string()
+                        );
+                    }
                 };
 
                 let result = unsafe { _mm256_mask_expandloadu_epi32(src, mask, mem_ptr) };
@@ -212,6 +235,7 @@ impl Interpreter {
     }
 
     pub fn execute(&mut self, ast: AST) -> Result<Argument, String> {
+        ast.validate(&self.function_registry)?;
         let result = match ast {
             AST::Call { name, args } => self.execute_call(name, args),
             AST::Var { name, value } => {
@@ -237,8 +261,7 @@ impl Interpreter {
         if let Some(func) = self.function_registry.find(&name) {
             let resolved_args: Vec<Argument> = if func.arguments().is_empty() {
                 // No type info: resolve all variables eagerly
-                args
-                    .into_iter()
+                args.into_iter()
                     .map(|arg| match arg {
                         Argument::Variable(var_name) => self
                             .variables
@@ -259,11 +282,10 @@ impl Interpreter {
                     } else {
                         match arg {
                             Argument::Variable(var_name) => {
-                                let val = self
-                                    .variables
-                                    .get(&var_name)
-                                    .cloned()
-                                    .ok_or_else(|| format!("Undefined variable: {}", var_name))?;
+                                let val =
+                                    self.variables.get(&var_name).cloned().ok_or_else(|| {
+                                        format!("Undefined variable: {}", var_name)
+                                    })?;
                                 out.push(val);
                             }
                             other => out.push(other),

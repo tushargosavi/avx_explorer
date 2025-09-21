@@ -32,6 +32,12 @@ pub trait FunctionInfo {
     fn arguments(&self) -> &[ArgType];
     fn return_type(&self) -> ArgType;
     fn execute(&self, ctx: &mut dyn ExecContext, args: &[Argument]) -> Result<Argument, String>;
+    fn min_args(&self) -> usize {
+        self.arguments().len()
+    }
+    fn max_args(&self) -> Option<usize> {
+        Some(self.arguments().len())
+    }
 }
 
 #[derive(Debug)]
@@ -40,6 +46,8 @@ pub struct Instruction {
     pub arguments: Vec<ArgType>,
     pub return_type: ArgType,
     pub exec: fn(&mut dyn ExecContext, &[Argument]) -> Result<Argument, String>,
+    pub min_args: usize,
+    pub max_args: Option<usize>,
 }
 
 impl Instruction {
@@ -49,11 +57,36 @@ impl Instruction {
         return_type: ArgType,
         exec: fn(&mut dyn ExecContext, &[Argument]) -> Result<Argument, String>,
     ) -> Self {
+        let min_args = arguments.len();
         Self {
             name: name.to_string(),
             arguments,
             return_type,
             exec,
+            min_args,
+            max_args: Some(min_args),
+        }
+    }
+
+    pub fn with_arg_range(
+        name: &str,
+        arguments: Vec<ArgType>,
+        return_type: ArgType,
+        min_args: usize,
+        max_args: Option<usize>,
+        exec: fn(&mut dyn ExecContext, &[Argument]) -> Result<Argument, String>,
+    ) -> Self {
+        if let Some(max) = max_args {
+            assert!(max >= min_args, "max_args must be >= min_args");
+        }
+
+        Self {
+            name: name.to_string(),
+            arguments,
+            return_type,
+            exec,
+            min_args,
+            max_args,
         }
     }
 }
@@ -73,6 +106,14 @@ impl FunctionInfo for Instruction {
 
     fn execute(&self, ctx: &mut dyn ExecContext, args: &[Argument]) -> Result<Argument, String> {
         (self.exec)(ctx, args)
+    }
+
+    fn min_args(&self) -> usize {
+        self.min_args
+    }
+
+    fn max_args(&self) -> Option<usize> {
+        self.max_args
     }
 }
 
@@ -133,6 +174,37 @@ pub enum AST {
     Call { name: String, args: Vec<Argument> },
     Var { name: String, value: Argument },
     Assign { dest: String, child: Box<AST> },
+}
+
+impl AST {
+    pub fn validate(&self, registry: &FunctionRegistry) -> Result<(), String> {
+        match self {
+            AST::Call { name, args } => {
+                let func = registry
+                    .find(name)
+                    .ok_or_else(|| format!("Unknown function: {}", name))?;
+                let arg_count = args.len();
+                let min_args = func.min_args();
+                if arg_count < min_args {
+                    return Err(format!(
+                        "Function '{}' expects at least {} argument(s), but {} provided",
+                        name, min_args, arg_count
+                    ));
+                }
+                if let Some(max_args) = func.max_args() {
+                    if arg_count > max_args {
+                        return Err(format!(
+                            "Function '{}' expects at most {} argument(s), but {} provided",
+                            name, max_args, arg_count
+                        ));
+                    }
+                }
+                Ok(())
+            }
+            AST::Var { .. } => Ok(()),
+            AST::Assign { child, .. } => child.validate(registry),
+        }
+    }
 }
 
 impl Argument {

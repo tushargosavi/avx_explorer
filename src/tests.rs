@@ -128,6 +128,45 @@ mod tests {
     }
 
     #[test]
+    fn test_ast_validate_unknown_function() {
+        let interpreter = Interpreter::new();
+        let ast = AST::Call {
+            name: "does_not_exist".to_string(),
+            args: vec![],
+        };
+
+        let result = ast.validate(&interpreter.function_registry);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_ast_validate_argument_counts() {
+        let interpreter = Interpreter::new();
+
+        let too_few = AST::Call {
+            name: "add".to_string(),
+            args: vec![Argument::Scalar(1)],
+        };
+        assert!(too_few.validate(&interpreter.function_registry).is_err());
+
+        let correct = AST::Call {
+            name: "add".to_string(),
+            args: vec![Argument::Scalar(1), Argument::Scalar(2)],
+        };
+        assert!(correct.validate(&interpreter.function_registry).is_ok());
+
+        let too_many = AST::Call {
+            name: "print_hex".to_string(),
+            args: vec![
+                Argument::Scalar(1),
+                Argument::Scalar(32),
+                Argument::Scalar(64),
+            ],
+        };
+        assert!(too_many.validate(&interpreter.function_registry).is_err());
+    }
+
+    #[test]
     fn test_argument_conversions() {
         let scalar = Argument::Scalar(0x123456789ABCDEF0);
         let array = Argument::Array(ArgType::I512, {
