@@ -1,5 +1,6 @@
 mod ast;
 mod avx2;
+mod avx_512;
 mod bmi2;
 mod display;
 mod interpreter;
