@@ -5,6 +5,7 @@ mod bmi2;
 mod display;
 mod interpreter;
 mod parser;
+mod sse2;
 use parser::parse_input;
 
 use crate::interpreter::Interpreter;

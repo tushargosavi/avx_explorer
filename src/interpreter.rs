@@ -2,6 +2,7 @@ use crate::ast::*;
 use crate::avx_512::register_avx512_instructions;
 use crate::avx2::register_avx2_instructions;
 use crate::bmi2::register_bmi2_instructions;
+use crate::sse2::register_sse2_instructions;
 use std::arch::x86_64::*;
 use std::collections::HashMap;
 
@@ -224,6 +225,9 @@ impl Interpreter {
             },
         ));
 
+        // Register SSE2 intrinsic-backed instructions
+        register_sse2_instructions(&mut registry);
+
         // Register AVX2 intrinsic-backed instructions
         register_avx2_instructions(&mut registry);
         // Register AVX-512 intrinsic-backed instructions
@@ -384,6 +388,22 @@ fn display_argument_simple(arg: &Argument) {
                 let values_str: Vec<String> = qwords.iter().map(|v| v.to_string()).collect();
                 println!("qw[{}]", values_str.join(", "));
             }
+            ArgType::I128 => {
+                let dwords: Vec<u32> = bytes
+                    .chunks(4)
+                    .map(|chunk| {
+                        u32::from_le_bytes([
+                            chunk[0],
+                            *chunk.get(1).unwrap_or(&0),
+                            *chunk.get(2).unwrap_or(&0),
+                            *chunk.get(3).unwrap_or(&0),
+                        ])
+                    })
+                    .take(4)
+                    .collect();
+                let values_str: Vec<String> = dwords.iter().map(|v| v.to_string()).collect();
+                println!("i128[{}]", values_str.join(", "));
+            }
             ArgType::I256 => {
                 let dwords: Vec<u32> = bytes
                     .chunks(4)
@@ -439,6 +459,7 @@ fn display_argument_simple(arg: &Argument) {
 
 fn valid_len_for_array(arg_type: &ArgType) -> usize {
     match arg_type {
+        ArgType::I128 => 16,
         ArgType::I256 => 32,
         ArgType::I512 => 64,
         // Treat typed arrays as full 64 bytes
@@ -664,6 +685,7 @@ fn print_dec(arg: &Argument) -> Result<(), String> {
                 ArgType::U16 => 16,
                 ArgType::U32 => 32,
                 ArgType::U64 => 64,
+                ArgType::I128 => 32,
                 ArgType::I256 => 32,
                 ArgType::I512 => 64,
                 ArgType::Ptr => 64,
@@ -741,6 +763,7 @@ fn print_bin(arg: &Argument) -> Result<(), String> {
                 ArgType::U16 => 16,
                 ArgType::U32 => 32,
                 ArgType::U64 => 64,
+                ArgType::I128 => 32,
                 ArgType::I256 => 32,
                 ArgType::I512 => 64,
                 ArgType::Ptr => 64,

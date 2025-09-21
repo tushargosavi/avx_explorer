@@ -13,6 +13,7 @@ pub enum AType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ArgType {
+    I128,
     I256,
     I512,
     U64,
@@ -153,6 +154,7 @@ impl ArgType {
             ArgType::U16 => 2,
             ArgType::U32 => 4,
             ArgType::U64 => 8,
+            ArgType::I128 => 16,
             ArgType::I256 => 32,
             ArgType::I512 => 64,
             ArgType::Ptr => 8,
@@ -208,9 +210,55 @@ impl AST {
 }
 
 impl Argument {
+    pub fn to_i128(&self) -> __m128i {
+        match self {
+            Argument::Array(_, bytes) => {
+                let mut result = [0i32; 4];
+                for i in 0..4 {
+                    let start = i * 4;
+                    if start + 4 <= bytes.len() {
+                        result[i] = i32::from_le_bytes([
+                            bytes[start],
+                            bytes[start + 1],
+                            bytes[start + 2],
+                            bytes[start + 3],
+                        ]);
+                    }
+                }
+                unsafe { std::mem::transmute(result) }
+            }
+            Argument::Scalar(val) => {
+                let mut result = [0i32; 4];
+                result[0] = *val as i32;
+                unsafe { std::mem::transmute(result) }
+            }
+            Argument::ScalarTyped(_, val) => {
+                let mut result = [0i32; 4];
+                result[0] = *val as i32;
+                unsafe { std::mem::transmute(result) }
+            }
+            _ => unsafe { std::mem::transmute([0i32; 4]) },
+        }
+    }
+
     pub fn to_i256(&self) -> __m256i {
         match self {
             Argument::Array(arg_type, bytes) => match arg_type {
+                ArgType::I128 => {
+                    let mut result = [0i32; 8];
+                    for i in 0..4 {
+                        let start = i * 4;
+                        if start + 4 <= bytes.len() {
+                            result[i] = i32::from_le_bytes([
+                                bytes[start],
+                                bytes[start + 1],
+                                bytes[start + 2],
+                                bytes[start + 3],
+                            ]);
+                        }
+                    }
+                    unsafe { std::mem::transmute(result) }
+                }
                 ArgType::I256 => {
                     let mut result = [0i32; 8];
                     for i in 0..8 {
