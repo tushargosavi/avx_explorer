@@ -117,6 +117,33 @@ impl Interpreter {
             },
         ));
 
+        registry.register_instruction(Instruction::with_arg_range(
+            "print_str",
+            vec![],
+            ArgType::U64,
+            0,
+            Some(1),
+            |ctx, args| {
+                if args.len() > 1 {
+                    return Err("print_str accepts at most 1 argument".to_string());
+                }
+
+                if args.is_empty() {
+                    if let Some(res) = ctx.get_var("_res") {
+                        let text = argument_to_utf8_lossy(res)?;
+                        println!("{}", text);
+                    } else {
+                        println!("_res is undefined");
+                    }
+                } else {
+                    let text = argument_to_utf8_lossy(&args[0])?;
+                    println!("{}", text);
+                }
+
+                Ok(Argument::Scalar(0))
+            },
+        ));
+
         registry.register_instruction(Instruction::new(
             "_mm256_mask_expand_epi8",
             vec![ArgType::I256, ArgType::I256, ArgType::U8],
@@ -588,7 +615,7 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
             }
         }
         Argument::Array(arg_type, bytes) => {
-            let valid = valid_len_for_array(arg_type);
+            let valid = arg_type.vector_byte_len();
             let data = &bytes[..valid.min(bytes.len())];
             if chunk_bits == 1 {
                 let mut out = String::new();
@@ -678,7 +705,7 @@ fn print_dec(arg: &Argument) -> Result<(), String> {
             println!("{}", v);
         }
         Argument::Array(arg_type, bytes) => {
-            let valid = valid_len_for_array(arg_type);
+            let valid = arg_type.vector_byte_len();
             let data = &bytes[..valid.min(bytes.len())];
             let chunk_bits = match arg_type {
                 ArgType::U8 => 8,
@@ -755,7 +782,7 @@ fn print_bin(arg: &Argument) -> Result<(), String> {
             println!("{:064b}", v);
         }
         Argument::Array(arg_type, bytes) => {
-            let valid = valid_len_for_array(arg_type);
+            let valid = arg_type.vector_byte_len();
             let data = &bytes[..valid.min(bytes.len())];
             // Use natural chunking similar to decimal
             let chunk_bits = match arg_type {
@@ -822,4 +849,34 @@ fn print_bin(arg: &Argument) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+pub(crate) fn argument_to_utf8_lossy(arg: &Argument) -> Result<String, String> {
+    match arg {
+        Argument::Scalar(val) => {
+            let bytes = val.to_le_bytes();
+            let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+            Ok(String::from_utf8_lossy(&bytes[..end]).into_owned())
+        }
+        Argument::ScalarTyped(arg_type, val) => {
+            let bytes = val.to_le_bytes();
+            let len = arg_type.byte_size().min(bytes.len());
+            let slice = &bytes[..len];
+            let end = slice.iter().position(|&b| b == 0).unwrap_or(slice.len());
+            Ok(String::from_utf8_lossy(&slice[..end]).into_owned())
+        }
+        Argument::Array(arg_type, bytes) => {
+            let len = arg_type.vector_byte_len().min(bytes.len());
+            let slice = &bytes[..len];
+            let end = slice.iter().position(|&b| b == 0).unwrap_or(slice.len());
+            Ok(String::from_utf8_lossy(&slice[..end]).into_owned())
+        }
+        Argument::Memory(bytes) => {
+            let end = bytes.iter().position(|&b| b == 0).unwrap_or(bytes.len());
+            Ok(String::from_utf8_lossy(&bytes[..end]).into_owned())
+        }
+        Argument::Variable(name) => {
+            Err(format!("print_str received unresolved variable '{}'", name))
+        }
+    }
 }

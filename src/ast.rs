@@ -1,5 +1,6 @@
 use std::arch::x86_64::*;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -160,15 +161,50 @@ impl ArgType {
             ArgType::Ptr => 8,
         }
     }
+
+    pub fn vector_byte_len(&self) -> usize {
+        match self {
+            ArgType::I128 => 16,
+            ArgType::I256 => 32,
+            ArgType::I512 => 64,
+            // Keep typed arrays at the full backing buffer size used throughout the
+            // interpreter for consistent display helpers.
+            ArgType::U8 | ArgType::U16 | ArgType::U32 | ArgType::U64 => 64,
+            ArgType::Ptr => 8,
+        }
+    }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Argument {
     Array(ArgType, [u8; 64]),
     Memory(Vec<u8>),
     Scalar(u64),
     ScalarTyped(ArgType, u64),
     Variable(String),
+}
+
+impl fmt::Debug for Argument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Argument::Array(arg_type, bytes) => {
+                let len = arg_type.vector_byte_len().min(bytes.len());
+                let slice = &bytes[..len];
+                f.debug_tuple("Array")
+                    .field(arg_type)
+                    .field(&slice)
+                    .finish()
+            }
+            Argument::Memory(bytes) => f.debug_tuple("Memory").field(bytes).finish(),
+            Argument::Scalar(val) => f.debug_tuple("Scalar").field(val).finish(),
+            Argument::ScalarTyped(arg_type, val) => f
+                .debug_tuple("ScalarTyped")
+                .field(arg_type)
+                .field(val)
+                .finish(),
+            Argument::Variable(name) => f.debug_tuple("Variable").field(name).finish(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

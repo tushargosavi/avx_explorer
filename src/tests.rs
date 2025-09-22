@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::ast::{AST, ArgType, Argument};
-    use crate::interpreter::Interpreter;
+    use crate::interpreter::{Interpreter, argument_to_utf8_lossy};
     use crate::parser::parse_input;
     use std::convert::TryInto;
 
@@ -239,6 +239,38 @@ mod tests {
             }
             other => panic!("Unexpected result: {:?}", other),
         }
+    }
+
+    #[test]
+    fn test_argument_debug_shows_valid_bytes() {
+        let mut raw = [0u8; 64];
+        for (i, byte) in raw.iter_mut().enumerate() {
+            *byte = i as u8;
+        }
+        let expected_slice: Vec<u8> = raw[..32].to_vec();
+        let arg = Argument::Array(ArgType::I256, raw);
+        let debug = format!("{:?}", arg);
+        let expected = format!("Array({:?}, {:?})", ArgType::I256, &expected_slice[..]);
+        assert_eq!(debug, expected);
+    }
+
+    #[test]
+    fn test_argument_to_utf8_lossy_helper() {
+        let mut raw = [0u8; 64];
+        let message = b"Hello";
+        raw[..message.len()].copy_from_slice(message);
+        let arg = Argument::Array(ArgType::I256, raw);
+        let text = argument_to_utf8_lossy(&arg).unwrap();
+        assert_eq!(text, "Hello");
+
+        let mem_arg = Argument::Memory(b"Hi there".to_vec());
+        let mem_text = argument_to_utf8_lossy(&mem_arg).unwrap();
+        assert_eq!(mem_text, "Hi there");
+
+        let scalar_val = u16::from_le_bytes(*b"Ok") as u64;
+        let scalar_arg = Argument::ScalarTyped(ArgType::U16, scalar_val);
+        let scalar_text = argument_to_utf8_lossy(&scalar_arg).unwrap();
+        assert_eq!(scalar_text, "Ok");
     }
 
     #[test]
