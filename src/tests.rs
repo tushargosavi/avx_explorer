@@ -272,7 +272,6 @@ mod tests {
         let scalar_text = argument_to_utf8_lossy(&scalar_arg).unwrap();
         assert_eq!(scalar_text, "Ok");
     }
-    }
 
     #[test]
     fn test_interpreter_variable_storage() {

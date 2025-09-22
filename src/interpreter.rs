@@ -484,6 +484,17 @@ fn display_argument_simple(arg: &Argument) {
     }
 }
 
+fn valid_len_for_array(arg_type: &ArgType) -> usize {
+    match arg_type {
+        ArgType::I128 => 16,
+        ArgType::I256 => 32,
+        ArgType::I512 => 64,
+        // Treat typed arrays as full 64 bytes
+        ArgType::U8 | ArgType::U16 | ArgType::U32 | ArgType::U64 => 64,
+        ArgType::Ptr => 8,
+    }
+}
+
 fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> {
     let chunk_bits = chunk_bits_opt.unwrap_or(32);
     if !(chunk_bits == 1 || matches!(chunk_bits, 8 | 16 | 32 | 64)) {
