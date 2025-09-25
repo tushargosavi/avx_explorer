@@ -1,0 +1,10 @@
+mask = 0xffffffffffffffffu64
+mask1 = _bzhi_u64(mask, 3)
+mask2 = _mm_set1_epi8(mask1)
+mask = _mm_cvtsi128_si64(mask2)
+print_hex(_res, 8)
+data = 0x398a418820u64
+dep = _pdep_u64(data, mask)
+r0 = _mm_set1_epi64x(dep)
+_mm256_cvtepi8_epi32(r0)
+print_hex(_res, 32)
