@@ -10,6 +10,8 @@ A Rust-based REPL simulator for AVX2 and AVX512 instruction sets with BMI2 exten
   - Load and store operations
   - Arithmetic operations (addition, subtraction)
   - Logical operations (AND, OR, XOR)
+  - Bit shift operations (shared-count and per-lane variants)
+  - Mask extraction and testing helpers
   - Comparison operations
   - Permutation and shuffle operations
 - **BMI2 Extensions**: Includes advanced bit manipulation instructions like `pdep`
@@ -84,6 +86,10 @@ prompt> _mm256_add_epi32(x, x)
 - `_mm256_and_si256` - Bitwise AND
 - `_mm256_or_si256` - Bitwise OR
 - `_mm256_xor_si256` - Bitwise XOR
+- `_mm256_sll_epi32` / `_mm256_srl_epi32` / `_mm256_sra_epi32` - Shared-count shifts
+- `_mm256_sllv_epi32` / `_mm256_srlv_epi32` / `_mm256_srav_epi32` - Per-lane shifts
+- `_mm256_movemask_epi8` - Extract sign bits into a mask
+- `_mm256_testz_si256` / `_mm256_testc_si256` / `_mm256_testnzc_si256` - Mask tests
 - `_mm256_cmpeq_epi32` - Compare packed 32-bit integers for equality
 - `_mm256_permutevar8x32_epi32` - Permute 32-bit integers
 - `_mm256_shuffle_epi8` - Shuffle bytes using control mask
