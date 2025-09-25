@@ -196,4 +196,657 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             Ok(m512i_to_argument(res))
         },
     ));
+
+    // shift immediate operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_slli_epi32",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_slli_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_sllv_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_slli_epi64",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_slli_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_sllv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srli_epi32",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_srli_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_srlv_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srli_epi64",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_srli_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_srlv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srai_epi32",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_srai_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_srav_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srai_epi64",
+        vec![ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_srai_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let imm = (args[1].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_srav_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    // shift immediate mask operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_slli_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_slli_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_mask_sllv_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_slli_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_slli_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_mask_sllv_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srli_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srli_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_mask_srlv_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srli_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srli_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_mask_srlv_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srai_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srai_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_mask_srav_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srai_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srai_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let imm = (args[3].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_mask_srav_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_slli_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_slli_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_maskz_sllv_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_slli_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_slli_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_maskz_sllv_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srli_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srli_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_maskz_srlv_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srli_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srli_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_maskz_srlv_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srai_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srai_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x1f) as i32;
+            let counts = unsafe { _mm512_set1_epi32(imm) };
+            let res = unsafe { _mm512_maskz_srav_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srai_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srai_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0x3f) as i64;
+            let counts = unsafe { _mm512_set1_epi64(imm) };
+            let res = unsafe { _mm512_maskz_srav_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    // variable shift operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_sllv_epi32",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_sllv_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_sllv_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_sllv_epi64",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_sllv_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_sllv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srlv_epi32",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_srlv_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_srlv_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srlv_epi64",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_srlv_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_srlv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srav_epi32",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_srav_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_srav_epi32(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srav_epi64",
+        vec![ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_srav_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let counts = args[1].to_i512();
+            let res = unsafe { _mm512_srav_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    // variable shift mask operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_sllv_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_sllv_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_sllv_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_sllv_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_sllv_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_sllv_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srlv_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srlv_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_srlv_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srlv_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srlv_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_srlv_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srav_epi32",
+        vec![ArgType::I512, ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srav_epi32 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u16();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_srav_epi32(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_mask_srav_epi64",
+        vec![ArgType::I512, ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 4 {
+                return Err("_mm512_mask_srav_epi64 requires 4 arguments".to_string());
+            }
+            let src = args[0].to_i512();
+            let mask = args[1].to_u8();
+            let a = args[2].to_i512();
+            let counts = args[3].to_i512();
+            let res = unsafe { _mm512_mask_srav_epi64(src, mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    // variable shift maskz operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_sllv_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_sllv_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_sllv_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_sllv_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_sllv_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_sllv_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srlv_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srlv_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_srlv_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srlv_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srlv_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_srlv_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srav_epi32",
+        vec![ArgType::U16, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srav_epi32 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u16();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_srav_epi32(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_maskz_srav_epi64",
+        vec![ArgType::U8, ArgType::I512, ArgType::I512],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 3 {
+                return Err("_mm512_maskz_srav_epi64 requires 3 arguments".to_string());
+            }
+            let mask = args[0].to_u8();
+            let a = args[1].to_i512();
+            let counts = args[2].to_i512();
+            let res = unsafe { _mm512_maskz_srav_epi64(mask, a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
 }
