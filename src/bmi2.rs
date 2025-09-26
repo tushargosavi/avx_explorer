@@ -131,7 +131,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
                     return Err(format!(
                         "_mulx_u32 third argument must be a pointer to a variable, found {:?}",
                         other
-                    ))
+                    ));
                 }
             };
 
@@ -142,7 +142,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
                         return Err(format!(
                             "Pointer '{}' must reference a scalar variable, found {:?}",
                             hi_var_name, other
-                        ))
+                        ));
                     }
                 }
             }
@@ -175,7 +175,7 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
                     return Err(format!(
                         "_mulx_u64 third argument must be a pointer to a variable, found {:?}",
                         other
-                    ))
+                    ));
                 }
             };
 
@@ -186,17 +186,14 @@ pub fn register_bmi2_instructions(registry: &mut FunctionRegistry) {
                         return Err(format!(
                             "Pointer '{}' must reference a scalar variable, found {:?}",
                             hi_var_name, other
-                        ))
+                        ));
                     }
                 }
             }
 
             let mut hi_out: u64 = 0;
             let lo = unsafe { _mulx_u64(a, b, &mut hi_out) };
-            ctx.set_var(
-                &hi_var_name,
-                Argument::ScalarTyped(ArgType::U64, hi_out),
-            );
+            ctx.set_var(&hi_var_name, Argument::ScalarTyped(ArgType::U64, hi_out));
             Ok(Argument::ScalarTyped(ArgType::U64, lo))
         },
     ));

@@ -864,14 +864,24 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
 
             // Get the memory to store to
             let mem_arg = match &args[0] {
-                Argument::Variable(name) => ctx.get_var(name).ok_or_else(|| format!("Undefined variable: {}", name))?,
+                Argument::Variable(name) => ctx
+                    .get_var(name)
+                    .ok_or_else(|| format!("Undefined variable: {}", name))?,
                 Argument::Memory(_) => &args[0],
-                _ => return Err("_mm256_storeu_epi32 first argument must be a memory pointer".to_string()),
+                _ => {
+                    return Err(
+                        "_mm256_storeu_epi32 first argument must be a memory pointer".to_string(),
+                    );
+                }
             };
 
             let memory = match mem_arg {
                 Argument::Memory(bytes) => bytes.clone(),
-                _ => return Err("_mm256_storeu_epi32 first argument must reference memory".to_string()),
+                _ => {
+                    return Err(
+                        "_mm256_storeu_epi32 first argument must reference memory".to_string()
+                    );
+                }
             };
 
             let value = args[1].to_i256();
