@@ -10,8 +10,10 @@ use parser::parse_input;
 
 use crate::interpreter::Interpreter;
 
+use rustyline::DefaultEditor;
+use rustyline::error::ReadlineError;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader};
 
 #[cfg(test)]
 mod tests;
@@ -67,25 +69,47 @@ fn run_repl(interpreter: &mut Interpreter) {
     println!("AVX2/AVX512 Simulator REPL");
     println!("Type 'exit' to quit");
 
-    loop {
-        print!("prompt> ");
-        if let Err(err) = io::stdout().flush() {
-            eprintln!("Failed to flush stdout: {}", err);
+    let mut editor = match DefaultEditor::new() {
+        Ok(editor) => editor,
+        Err(err) => {
+            eprintln!("Failed to initialize line editor: {}", err);
+            std::process::exit(1);
         }
+    };
 
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(0) => break,
-            Ok(_) => {
-                if !handle_line(interpreter, &input) {
+    let _ = editor.load_history(".avx_explorer_history");
+
+    loop {
+        match editor.readline("prompt> ") {
+            Ok(line) => {
+                let trimmed = line.trim();
+
+                if trimmed.is_empty() {
+                    continue;
+                }
+
+                if editor.add_history_entry(trimmed).is_err() {
+                    eprintln!("Warning: failed to add line to history");
+                }
+
+                if !handle_line(interpreter, trimmed) {
                     break;
                 }
             }
+            Err(ReadlineError::Interrupted) => {
+                println!("^C");
+                continue;
+            }
+            Err(ReadlineError::Eof) => break,
             Err(err) => {
                 eprintln!("Error reading input: {}", err);
                 break;
             }
         }
+    }
+
+    if let Err(err) = editor.save_history(".avx_explorer_history") {
+        eprintln!("Warning: failed to save history: {}", err);
     }
 }
 
