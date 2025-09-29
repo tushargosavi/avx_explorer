@@ -1,0 +1,15 @@
+mem1 = [0x00,0x11,0x23, 0x12, 0x32,0x56, 0x45,0x56,0x68,0x90]
+mem2 = zeros(100)
+
+data = _mm512_loadu_si512(input)
+mask = _mm512_set1_epi32(0x0F)
+
+v0 = _mm512_and_si512(data, mask)
+v1 = _mm512_and_si512(_mm512_srli_epi32(data, 4), mask)
+v2 = _mm512_and_si512(_mm512_srli_epi32(data, 8), mask)
+v3 = _mm512_and_si512(_mm512_srli_epi32(data, 12), mask)
+
+_mm512_storeu_si512(output, v0)
+_mm512_storeu_si512(output + 16, v1)
+_mm512_storeu_si512(output + 32, v2)
+_mm512_storeu_si512(output + 48, v3)

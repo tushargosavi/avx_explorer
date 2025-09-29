@@ -281,6 +281,11 @@ impl Interpreter {
                 self.variables.insert(dest, result.clone());
                 Ok(result)
             }
+            AST::VarLookup { name } => self
+                .variables
+                .get(&name)
+                .cloned()
+                .ok_or_else(|| format!("Undefined variable: {}", name)),
         };
 
         // Store result in _res for all statements

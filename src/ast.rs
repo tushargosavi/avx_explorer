@@ -213,6 +213,7 @@ pub enum AST {
     Call { name: String, args: Vec<Argument> },
     Var { name: String, value: Argument },
     Assign { dest: String, child: Box<AST> },
+    VarLookup { name: String },
 }
 
 impl AST {
@@ -242,6 +243,7 @@ impl AST {
             }
             AST::Var { .. } => Ok(()),
             AST::Assign { child, .. } => child.validate(registry),
+            AST::VarLookup { .. } => Ok(()),
         }
     }
 }

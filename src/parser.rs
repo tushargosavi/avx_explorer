@@ -36,6 +36,11 @@ pub fn parse_input(input: &str) -> Result<AST, String> {
         }
     } else if input.ends_with(')') && input.contains('(') {
         parse_call(input)
+    } else if input.chars().all(|c| c.is_alphanumeric() || c == '_') && !input.is_empty() {
+        // Variable lookup - just the variable name
+        Ok(AST::VarLookup {
+            name: input.to_string(),
+        })
     } else {
         Err("Invalid input format".to_string())
     }
