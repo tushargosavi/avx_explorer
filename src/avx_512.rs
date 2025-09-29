@@ -1,5 +1,6 @@
-use crate::ast::{ArgType, Argument, FunctionRegistry, Instruction};
+use crate::ast::{ArgType, Argument, ExecContext, FunctionRegistry, Instruction};
 use std::arch::x86_64::*;
+use std::convert::TryFrom;
 
 fn m512i_to_argument(value: __m512i) -> Argument {
     let lanes: [i64; 8] = unsafe { std::mem::transmute(value) };
@@ -10,6 +11,74 @@ fn m512i_to_argument(value: __m512i) -> Argument {
         bytes[start..start + 8].copy_from_slice(&lane_bytes);
     }
     Argument::Array(ArgType::I512, bytes)
+}
+
+fn clone_memory_from_ptr(
+    ctx: &mut dyn ExecContext,
+    ptr_arg: &Argument,
+    instr: &str,
+) -> Result<Vec<u8>, String> {
+    match ptr_arg {
+        Argument::Variable(name) => match ctx.get_var(name) {
+            Some(Argument::Memory(bytes)) => Ok(bytes.clone()),
+            Some(other) => Err(format!(
+                "{} pointer '{}' does not reference memory (found {:?})",
+                instr, name, other
+            )),
+            None => Err(format!("Undefined pointer variable: {}", name)),
+        },
+        Argument::Memory(bytes) => Ok(bytes.clone()),
+        _ => Err(format!("{} first argument must be a memory pointer", instr)),
+    }
+}
+
+fn extract_offset(arg: Option<&Argument>) -> Result<usize, String> {
+    if let Some(arg) = arg {
+        usize::try_from(arg.to_u64())
+            .map_err(|_| "Offset exceeds addressable range on this platform".to_string())
+    } else {
+        Ok(0)
+    }
+}
+
+fn m512i_to_bytes(value: __m512i) -> [u8; 64] {
+    let lanes: [i64; 8] = unsafe { std::mem::transmute(value) };
+    let mut bytes = [0u8; 64];
+    for (idx, lane) in lanes.iter().enumerate() {
+        let le = lane.to_le_bytes();
+        let start = idx * 8;
+        bytes[start..start + 8].copy_from_slice(&le);
+    }
+    bytes
+}
+
+fn bytes_to_m512i(bytes: &[u8]) -> __m512i {
+    let mut lanes = [0i64; 8];
+    for i in 0..8 {
+        let start = i * 8;
+        lanes[i] = i64::from_le_bytes([
+            bytes[start],
+            bytes[start + 1],
+            bytes[start + 2],
+            bytes[start + 3],
+            bytes[start + 4],
+            bytes[start + 5],
+            bytes[start + 6],
+            bytes[start + 7],
+        ]);
+    }
+    unsafe { std::mem::transmute(lanes) }
+}
+
+fn ensure_alignment(offset: usize, alignment: usize, instr: &str) -> Result<(), String> {
+    if offset % alignment != 0 {
+        Err(format!(
+            "{} requires a {}-byte aligned offset (got {})",
+            instr, alignment, offset
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[inline]
@@ -60,6 +129,128 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             let v = args[0].to_u64() as i64;
             let res = unsafe { _mm512_set1_epi64(v) };
             Ok(m512i_to_argument(res))
+        },
+    ));
+
+    // AVX-512 load/store operations
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm512_load_si512",
+        vec![ArgType::Ptr, ArgType::U64],
+        ArgType::I512,
+        1,
+        Some(2),
+        |ctx, args| {
+            require_avx512f()?;
+            if args.len() < 1 || args.len() > 2 {
+                return Err("_mm512_load_si512 expects 1 or 2 arguments".to_string());
+            }
+
+            let offset = extract_offset(args.get(1))?;
+            ensure_alignment(offset, 64, "_mm512_load_si512")?;
+
+            let memory = clone_memory_from_ptr(ctx, &args[0], "_mm512_load_si512")?;
+            let end = offset
+                .checked_add(64)
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if end > memory.len() {
+                return Err(format!(
+                    "_mm512_load_si512 reading 64 byte(s) at offset {} exceeds memory length {}",
+                    offset,
+                    memory.len()
+                ));
+            }
+
+            let vec = bytes_to_m512i(&memory[offset..end]);
+            Ok(m512i_to_argument(vec))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm512_loadu_si512",
+        vec![ArgType::Ptr, ArgType::U64],
+        ArgType::I512,
+        1,
+        Some(2),
+        |ctx, args| {
+            require_avx512f()?;
+            if args.len() < 1 || args.len() > 2 {
+                return Err("_mm512_loadu_si512 expects 1 or 2 arguments".to_string());
+            }
+
+            let offset = extract_offset(args.get(1))?;
+            let memory = clone_memory_from_ptr(ctx, &args[0], "_mm512_loadu_si512")?;
+            let end = offset
+                .checked_add(64)
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if end > memory.len() {
+                return Err(format!(
+                    "_mm512_loadu_si512 reading 64 byte(s) at offset {} exceeds memory length {}",
+                    offset,
+                    memory.len()
+                ));
+            }
+
+            let vec = bytes_to_m512i(&memory[offset..end]);
+            Ok(m512i_to_argument(vec))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm512_store_si512",
+        vec![ArgType::Ptr, ArgType::I512, ArgType::U64],
+        ArgType::Ptr,
+        2,
+        Some(3),
+        |ctx, args| {
+            require_avx512f()?;
+            if args.len() < 2 || args.len() > 3 {
+                return Err("_mm512_store_si512 expects 2 or 3 arguments".to_string());
+            }
+
+            let mut memory = clone_memory_from_ptr(ctx, &args[0], "_mm512_store_si512")?;
+            let offset = extract_offset(args.get(2))?;
+            ensure_alignment(offset, 64, "_mm512_store_si512")?;
+
+            let value = args[1].to_i512();
+            let bytes = m512i_to_bytes(value);
+            let end = offset
+                .checked_add(bytes.len())
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if memory.len() < end {
+                memory.resize(end, 0);
+            }
+            memory[offset..end].copy_from_slice(&bytes);
+
+            Ok(Argument::Memory(memory))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm512_storeu_si512",
+        vec![ArgType::Ptr, ArgType::I512, ArgType::U64],
+        ArgType::Ptr,
+        2,
+        Some(3),
+        |ctx, args| {
+            require_avx512f()?;
+            if args.len() < 2 || args.len() > 3 {
+                return Err("_mm512_storeu_si512 expects 2 or 3 arguments".to_string());
+            }
+
+            let mut memory = clone_memory_from_ptr(ctx, &args[0], "_mm512_storeu_si512")?;
+            let offset = extract_offset(args.get(2))?;
+
+            let value = args[1].to_i512();
+            let bytes = m512i_to_bytes(value);
+            let end = offset
+                .checked_add(bytes.len())
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if memory.len() < end {
+                memory.resize(end, 0);
+            }
+            memory[offset..end].copy_from_slice(&bytes);
+
+            Ok(Argument::Memory(memory))
         },
     ));
 

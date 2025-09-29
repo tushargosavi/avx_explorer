@@ -1,5 +1,6 @@
-use crate::ast::{ArgType, Argument, FunctionRegistry, Instruction};
+use crate::ast::{ArgType, Argument, ExecContext, FunctionRegistry, Instruction};
 use std::arch::x86_64::*;
+use std::convert::TryFrom;
 
 fn m128i_to_argument(value: __m128i) -> Argument {
     let array: [i32; 4] = unsafe { std::mem::transmute(value) };
@@ -21,6 +22,70 @@ fn m256i_to_argument(value: __m256i) -> Argument {
         bytes[start..start + 4].copy_from_slice(&val_bytes);
     }
     Argument::Array(ArgType::I256, bytes)
+}
+
+fn clone_memory_from_ptr(
+    ctx: &mut dyn ExecContext,
+    ptr_arg: &Argument,
+    instr: &str,
+) -> Result<Vec<u8>, String> {
+    match ptr_arg {
+        Argument::Variable(name) => match ctx.get_var(name) {
+            Some(Argument::Memory(bytes)) => Ok(bytes.clone()),
+            Some(other) => Err(format!(
+                "{} pointer '{}' does not reference memory (found {:?})",
+                instr, name, other
+            )),
+            None => Err(format!("Undefined pointer variable: {}", name)),
+        },
+        Argument::Memory(bytes) => Ok(bytes.clone()),
+        _ => Err(format!("{} first argument must be a memory pointer", instr)),
+    }
+}
+
+fn extract_offset(arg: Option<&Argument>) -> Result<usize, String> {
+    if let Some(arg) = arg {
+        usize::try_from(arg.to_u64())
+            .map_err(|_| "Offset exceeds addressable range on this platform".to_string())
+    } else {
+        Ok(0)
+    }
+}
+
+fn m256i_to_bytes(value: __m256i) -> [u8; 32] {
+    let lanes: [i32; 8] = unsafe { std::mem::transmute(value) };
+    let mut bytes = [0u8; 32];
+    for (idx, lane) in lanes.iter().enumerate() {
+        let le = lane.to_le_bytes();
+        let start = idx * 4;
+        bytes[start..start + 4].copy_from_slice(&le);
+    }
+    bytes
+}
+
+fn bytes_to_m256i(bytes: &[u8]) -> __m256i {
+    let mut lanes = [0i32; 8];
+    for i in 0..8 {
+        let start = i * 4;
+        lanes[i] = i32::from_le_bytes([
+            bytes[start],
+            bytes[start + 1],
+            bytes[start + 2],
+            bytes[start + 3],
+        ]);
+    }
+    unsafe { std::mem::transmute(lanes) }
+}
+
+fn ensure_alignment(offset: usize, alignment: usize, instr: &str) -> Result<(), String> {
+    if offset % alignment != 0 {
+        Err(format!(
+            "{} requires a {}-byte aligned offset (got {})",
+            instr, alignment, offset
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 #[inline]
@@ -834,6 +899,128 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             let idx = args[1].to_i256();
             let res = unsafe { _mm256_permutevar8x32_epi32(a, idx) };
             Ok(m256i_to_argument(res))
+        },
+    ));
+
+    // AVX2 load/store operations
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm256_load_si256",
+        vec![ArgType::Ptr, ArgType::U64],
+        ArgType::I256,
+        1,
+        Some(2),
+        |ctx, args| {
+            require_avx()?;
+            if args.len() < 1 || args.len() > 2 {
+                return Err("_mm256_load_si256 expects 1 or 2 arguments".to_string());
+            }
+
+            let offset = extract_offset(args.get(1))?;
+            ensure_alignment(offset, 32, "_mm256_load_si256")?;
+
+            let memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_load_si256")?;
+            let end = offset
+                .checked_add(32)
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if end > memory.len() {
+                return Err(format!(
+                    "_mm256_load_si256 reading 32 byte(s) at offset {} exceeds memory length {}",
+                    offset,
+                    memory.len()
+                ));
+            }
+
+            let vec = bytes_to_m256i(&memory[offset..end]);
+            Ok(m256i_to_argument(vec))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm256_loadu_si256",
+        vec![ArgType::Ptr, ArgType::U64],
+        ArgType::I256,
+        1,
+        Some(2),
+        |ctx, args| {
+            require_avx()?;
+            if args.len() < 1 || args.len() > 2 {
+                return Err("_mm256_loadu_si256 expects 1 or 2 arguments".to_string());
+            }
+
+            let offset = extract_offset(args.get(1))?;
+            let memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_loadu_si256")?;
+            let end = offset
+                .checked_add(32)
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if end > memory.len() {
+                return Err(format!(
+                    "_mm256_loadu_si256 reading 32 byte(s) at offset {} exceeds memory length {}",
+                    offset,
+                    memory.len()
+                ));
+            }
+
+            let vec = bytes_to_m256i(&memory[offset..end]);
+            Ok(m256i_to_argument(vec))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm256_store_si256",
+        vec![ArgType::Ptr, ArgType::I256, ArgType::U64],
+        ArgType::Ptr,
+        2,
+        Some(3),
+        |ctx, args| {
+            require_avx()?;
+            if args.len() < 2 || args.len() > 3 {
+                return Err("_mm256_store_si256 expects 2 or 3 arguments".to_string());
+            }
+
+            let mut memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_store_si256")?;
+            let offset = extract_offset(args.get(2))?;
+            ensure_alignment(offset, 32, "_mm256_store_si256")?;
+
+            let value = args[1].to_i256();
+            let bytes = m256i_to_bytes(value);
+            let end = offset
+                .checked_add(bytes.len())
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if memory.len() < end {
+                memory.resize(end, 0);
+            }
+            memory[offset..end].copy_from_slice(&bytes);
+
+            Ok(Argument::Memory(memory))
+        },
+    ));
+
+    registry.register_instruction(Instruction::with_arg_range(
+        "_mm256_storeu_si256",
+        vec![ArgType::Ptr, ArgType::I256, ArgType::U64],
+        ArgType::Ptr,
+        2,
+        Some(3),
+        |ctx, args| {
+            require_avx()?;
+            if args.len() < 2 || args.len() > 3 {
+                return Err("_mm256_storeu_si256 expects 2 or 3 arguments".to_string());
+            }
+
+            let mut memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_storeu_si256")?;
+            let offset = extract_offset(args.get(2))?;
+
+            let value = args[1].to_i256();
+            let bytes = m256i_to_bytes(value);
+            let end = offset
+                .checked_add(bytes.len())
+                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
+            if memory.len() < end {
+                memory.resize(end, 0);
+            }
+            memory[offset..end].copy_from_slice(&bytes);
+
+            Ok(Argument::Memory(memory))
         },
     ));
 
