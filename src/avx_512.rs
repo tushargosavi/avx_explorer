@@ -140,7 +140,6 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
         1,
         Some(2),
         |ctx, args| {
-            require_avx512f()?;
             if args.len() < 1 || args.len() > 2 {
                 return Err("_mm512_load_si512 expects 1 or 2 arguments".to_string());
             }
@@ -172,7 +171,6 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
         1,
         Some(2),
         |ctx, args| {
-            require_avx512f()?;
             if args.len() < 1 || args.len() > 2 {
                 return Err("_mm512_loadu_si512 expects 1 or 2 arguments".to_string());
             }
@@ -202,7 +200,6 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
         2,
         Some(3),
         |ctx, args| {
-            require_avx512f()?;
             if args.len() < 2 || args.len() > 3 {
                 return Err("_mm512_store_si512 expects 2 or 3 arguments".to_string());
             }
@@ -232,7 +229,6 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
         2,
         Some(3),
         |ctx, args| {
-            require_avx512f()?;
             if args.len() < 2 || args.len() > 3 {
                 return Err("_mm512_storeu_si512 expects 2 or 3 arguments".to_string());
             }
