@@ -273,19 +273,49 @@ impl Interpreter {
         let result = match ast {
             AST::Call { name, args } => self.execute_call(name, args),
             AST::Var { name, value } => {
-                self.variables.insert(name.clone(), value.clone());
-                Ok(value)
+                let resolved = self.resolve_argument(value.clone())?;
+                self.variables.insert(name.clone(), resolved.clone());
+                Ok(resolved)
             }
             AST::Assign { dest, child } => {
                 let result = self.execute(*child)?;
-                self.variables.insert(dest, result.clone());
-                Ok(result)
+                let resolved = self.resolve_argument(result)?;
+                self.variables.insert(dest, resolved.clone());
+                Ok(resolved)
             }
             AST::VarLookup { name } => self
                 .variables
                 .get(&name)
                 .cloned()
                 .ok_or_else(|| format!("Undefined variable: {}", name)),
+            AST::MemoryStore {
+                name,
+                access,
+                value,
+            } => {
+                let resolved_value = self.resolve_argument(value.clone())?;
+                let data = argument_to_bytes(&resolved_value)?;
+                let entry = self
+                    .variables
+                    .get_mut(&name)
+                    .ok_or_else(|| format!("Undefined memory variable: {}", name))?;
+                let bytes = match entry {
+                    Argument::Memory(bytes) => bytes,
+                    other => {
+                        return Err(format!(
+                            "Variable '{}' is not memory and cannot be indexed (found {:?})",
+                            name, other
+                        ));
+                    }
+                };
+                let (start, end) = access.for_assignment(bytes.len(), data.len())?;
+                bytes[start..end].copy_from_slice(&data);
+                Ok(resolved_value)
+            }
+            AST::MemorySliceLookup { name, access } => {
+                let data = self.read_memory_slice(&name, &access)?;
+                Ok(Argument::Memory(data))
+            }
         };
 
         // Store result in _res for all statements
@@ -299,36 +329,22 @@ impl Interpreter {
     fn execute_call(&mut self, name: String, args: Vec<Argument>) -> Result<Argument, String> {
         if let Some(func) = self.function_registry.find(&name) {
             let resolved_args: Vec<Argument> = if func.arguments().is_empty() {
-                // No type info: resolve all variables eagerly
                 args.into_iter()
-                    .map(|arg| match arg {
-                        Argument::Variable(var_name) => self
-                            .variables
-                            .get(&var_name)
-                            .cloned()
-                            .ok_or_else(|| format!("Undefined variable: {}", var_name)),
-                        other => Ok(other),
-                    })
+                    .map(|arg| self.resolve_argument(arg))
                     .collect::<Result<Vec<_>, _>>()?
             } else {
-                // Use signature to preserve pointer variables for ArgType::Ptr
                 let sig = func.arguments();
                 let mut out = Vec::with_capacity(args.len());
                 for (idx, arg) in args.into_iter().enumerate() {
                     let keep_as_ptr = sig.get(idx).map(|t| *t == ArgType::Ptr).unwrap_or(false);
                     if keep_as_ptr {
+                        if matches!(arg, Argument::MemorySlice { .. }) {
+                            return Err("Pointer arguments do not currently support memory slices"
+                                .to_string());
+                        }
                         out.push(arg);
                     } else {
-                        match arg {
-                            Argument::Variable(var_name) => {
-                                let val =
-                                    self.variables.get(&var_name).cloned().ok_or_else(|| {
-                                        format!("Undefined variable: {}", var_name)
-                                    })?;
-                                out.push(val);
-                            }
-                            other => out.push(other),
-                        }
+                        out.push(self.resolve_argument(arg)?);
                     }
                 }
                 out
@@ -486,6 +502,7 @@ fn display_argument_simple(arg: &Argument) {
             println!("variable<{}>", name);
         }
         Argument::Memory(bytes) => println!("memory[{} bytes]", bytes.len()),
+        Argument::MemorySlice { name, .. } => println!("memory_slice<{}>", name),
     }
 }
 
@@ -502,8 +519,8 @@ fn valid_len_for_array(arg_type: &ArgType) -> usize {
 
 fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> {
     let chunk_bits = chunk_bits_opt.unwrap_or(32);
-    if !(chunk_bits == 1 || matches!(chunk_bits, 8 | 16 | 32 | 64)) {
-        return Err("chunk_bits must be 1 (bitstring) or one of 8, 16, 32, 64".to_string());
+    if !(chunk_bits == 1 || matches!(chunk_bits, 8 | 16 | 32 | 64 | 128)) {
+        return Err("chunk_bits must be 1 (bitstring) or one of 8, 16, 32, 64, 128".to_string());
     }
     match arg {
         Argument::Scalar(v) => {
@@ -675,6 +692,32 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
                         }
                         println!("");
                     }
+                    128 => {
+                        for chunk in data.chunks_exact(16) {
+                            let v_low = u64::from_le_bytes([
+                                chunk[0],
+                                *chunk.get(1).unwrap_or(&0),
+                                *chunk.get(2).unwrap_or(&0),
+                                *chunk.get(3).unwrap_or(&0),
+                                *chunk.get(4).unwrap_or(&0),
+                                *chunk.get(5).unwrap_or(&0),
+                                *chunk.get(6).unwrap_or(&0),
+                                *chunk.get(7).unwrap_or(&0),
+                            ]);
+                            let v_high = u64::from_le_bytes([
+                                *chunk.get(8).unwrap_or(&0),
+                                *chunk.get(9).unwrap_or(&0),
+                                *chunk.get(10).unwrap_or(&0),
+                                *chunk.get(11).unwrap_or(&0),
+                                *chunk.get(12).unwrap_or(&0),
+                                *chunk.get(13).unwrap_or(&0),
+                                *chunk.get(14).unwrap_or(&0),
+                                *chunk.get(15).unwrap_or(&0),
+                            ]);
+                            print!("0x{:016x}{:016x} ", v_high, v_low);
+                        }
+                        println!("");
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -691,12 +734,10 @@ fn print_hex(arg: &Argument, chunk_bits_opt: Option<u64>) -> Result<(), String> 
                 }
                 println!("{}", out);
             } else {
-                for b in bytes.iter() {
-                    print!("0x{:02x} ", b);
-                }
-                println!("");
+                print_memory_hex(bytes, chunk_bits as usize);
             }
         }
+        Argument::MemorySlice { .. } => unreachable!("memory slices are resolved before printing"),
     }
     Ok(())
 }
@@ -774,6 +815,7 @@ fn print_dec(arg: &Argument) -> Result<(), String> {
             }
             println!("");
         }
+        Argument::MemorySlice { .. } => unreachable!("memory slices are resolved before printing"),
     }
     Ok(())
 }
@@ -852,6 +894,7 @@ fn print_bin(arg: &Argument) -> Result<(), String> {
             }
             println!("");
         }
+        Argument::MemorySlice { .. } => unreachable!("memory slices are resolved before printing"),
     }
     Ok(())
 }
@@ -883,5 +926,154 @@ pub(crate) fn argument_to_utf8_lossy(arg: &Argument) -> Result<String, String> {
         Argument::Variable(name) => {
             Err(format!("print_str received unresolved variable '{}'", name))
         }
+        Argument::MemorySlice { name, .. } => Err(format!(
+            "print_str received unresolved memory slice '{}[...]'",
+            name
+        )),
+    }
+}
+
+impl Interpreter {
+    fn resolve_argument(&self, arg: Argument) -> Result<Argument, String> {
+        match arg {
+            Argument::Variable(name) => {
+                let value = self
+                    .variables
+                    .get(&name)
+                    .cloned()
+                    .ok_or_else(|| format!("Undefined variable: {}", name))?;
+                self.resolve_argument(value)
+            }
+            Argument::MemorySlice { name, access } => {
+                let data = self.read_memory_slice(&name, &access)?;
+                Ok(Argument::Memory(data))
+            }
+            Argument::Memory(bytes) => Ok(Argument::Memory(bytes)),
+            Argument::Array(arg_type, bytes) => Ok(Argument::Array(arg_type, bytes)),
+            Argument::Scalar(v) => Ok(Argument::Scalar(v)),
+            Argument::ScalarTyped(t, v) => Ok(Argument::ScalarTyped(t, v)),
+        }
+    }
+
+    fn read_memory_slice(&self, name: &str, access: &MemoryAccess) -> Result<Vec<u8>, String> {
+        let entry = self
+            .variables
+            .get(name)
+            .ok_or_else(|| format!("Undefined memory variable: {}", name))?;
+        let bytes = match entry {
+            Argument::Memory(bytes) => bytes,
+            other => {
+                return Err(format!(
+                    "Variable '{}' is not memory and cannot be sliced (found {:?})",
+                    name, other
+                ));
+            }
+        };
+        let (start, end) = access.for_lookup(bytes.len())?;
+        Ok(bytes[start..end].to_vec())
+    }
+}
+
+fn argument_to_bytes(arg: &Argument) -> Result<Vec<u8>, String> {
+    match arg {
+        Argument::Memory(bytes) => Ok(bytes.clone()),
+        Argument::Array(arg_type, bytes) => {
+            let len = arg_type.vector_byte_len().min(bytes.len());
+            Ok(bytes[..len].to_vec())
+        }
+        Argument::Scalar(v) => Ok(vec![(*v & 0xFF) as u8]),
+        Argument::ScalarTyped(arg_type, v) => match arg_type {
+            ArgType::U8 | ArgType::U16 | ArgType::U32 | ArgType::U64 => {
+                let width = arg_type.byte_size();
+                let le = v.to_le_bytes();
+                Ok(le[..width].to_vec())
+            }
+            _ => {
+                Err("Only u8/u16/u32/u64 typed scalars are supported for memory writes".to_string())
+            }
+        },
+        Argument::Variable(name) => Err(format!(
+            "Unresolved variable '{}' encountered during memory write",
+            name
+        )),
+        Argument::MemorySlice { .. } => {
+            Err("Memory slice must be resolved before writing".to_string())
+        }
+    }
+}
+
+fn print_memory_hex(bytes: &[u8], chunk_bits: usize) {
+    match chunk_bits {
+        8 => {
+            for b in bytes {
+                print!("0x{:02x} ", b);
+            }
+            println!("");
+        }
+        16 => {
+            for chunk in bytes.chunks(2) {
+                let v = u16::from_le_bytes([
+                    chunk.get(0).copied().unwrap_or(0),
+                    chunk.get(1).copied().unwrap_or(0),
+                ]);
+                print!("0x{:04x} ", v);
+            }
+            println!("");
+        }
+        32 => {
+            for chunk in bytes.chunks(4) {
+                let v = u32::from_le_bytes([
+                    chunk.get(0).copied().unwrap_or(0),
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(3).copied().unwrap_or(0),
+                ]);
+                print!("0x{:08x} ", v);
+            }
+            println!("");
+        }
+        64 => {
+            for chunk in bytes.chunks(8) {
+                let v = u64::from_le_bytes([
+                    chunk.get(0).copied().unwrap_or(0),
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(3).copied().unwrap_or(0),
+                    chunk.get(4).copied().unwrap_or(0),
+                    chunk.get(5).copied().unwrap_or(0),
+                    chunk.get(6).copied().unwrap_or(0),
+                    chunk.get(7).copied().unwrap_or(0),
+                ]);
+                print!("0x{:016x} ", v);
+            }
+            println!("");
+        }
+        128 => {
+            for chunk in bytes.chunks(16) {
+                let low = u64::from_le_bytes([
+                    chunk.get(0).copied().unwrap_or(0),
+                    chunk.get(1).copied().unwrap_or(0),
+                    chunk.get(2).copied().unwrap_or(0),
+                    chunk.get(3).copied().unwrap_or(0),
+                    chunk.get(4).copied().unwrap_or(0),
+                    chunk.get(5).copied().unwrap_or(0),
+                    chunk.get(6).copied().unwrap_or(0),
+                    chunk.get(7).copied().unwrap_or(0),
+                ]);
+                let high = u64::from_le_bytes([
+                    chunk.get(8).copied().unwrap_or(0),
+                    chunk.get(9).copied().unwrap_or(0),
+                    chunk.get(10).copied().unwrap_or(0),
+                    chunk.get(11).copied().unwrap_or(0),
+                    chunk.get(12).copied().unwrap_or(0),
+                    chunk.get(13).copied().unwrap_or(0),
+                    chunk.get(14).copied().unwrap_or(0),
+                    chunk.get(15).copied().unwrap_or(0),
+                ]);
+                print!("0x{:016x}{:016x} ", high, low);
+            }
+            println!("");
+        }
+        _ => {}
     }
 }
