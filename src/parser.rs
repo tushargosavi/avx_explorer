@@ -112,6 +112,9 @@ fn parse_call(input: &str) -> Result<AST, String> {
 
 fn parse_argument(input: &str) -> Result<Argument, String> {
     // memory constructor: mem[SIZE] or mem[values...]
+    if input.starts_with('"') && input.ends_with('"') {
+        return parse_string_literal(input);
+    }
     if input.starts_with("mem[") && input.ends_with(']') {
         return parse_memory(input);
     }
@@ -135,6 +138,53 @@ fn parse_argument(input: &str) -> Result<Argument, String> {
     } else {
         Err(format!("Invalid argument: {}", input))
     }
+}
+
+fn parse_string_literal(input: &str) -> Result<Argument, String> {
+    if input.len() < 2 || !input.starts_with('"') || !input.ends_with('"') {
+        return Err("Invalid string literal".to_string());
+    }
+
+    let mut bytes = Vec::new();
+    let mut chars = input[1..input.len() - 1].chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            let escaped = chars
+                .next()
+                .ok_or_else(|| "Incomplete escape sequence in string literal".to_string())?;
+            match escaped {
+                '\\' => bytes.push(b'\\'),
+                '"' => bytes.push(b'"'),
+                'n' => bytes.push(b'\n'),
+                'r' => bytes.push(b'\r'),
+                't' => bytes.push(b'\t'),
+                '0' => bytes.push(0),
+                'x' => {
+                    let hi = chars
+                        .next()
+                        .ok_or_else(|| "Incomplete hex escape in string literal".to_string())?;
+                    let lo = chars
+                        .next()
+                        .ok_or_else(|| "Incomplete hex escape in string literal".to_string())?;
+                    let mut hex = String::new();
+                    hex.push(hi);
+                    hex.push(lo);
+                    let value = u8::from_str_radix(&hex, 16)
+                        .map_err(|_| format!("Invalid hex escape: \\x{}", hex))?;
+                    bytes.push(value);
+                }
+                other => {
+                    return Err(format!("Unsupported escape sequence: \\{}", other));
+                }
+            }
+        } else {
+            let mut buf = [0u8; 4];
+            let encoded = ch.encode_utf8(&mut buf);
+            bytes.extend_from_slice(encoded.as_bytes());
+        }
+    }
+
+    Ok(Argument::Memory(bytes))
 }
 
 fn parse_array(input: &str) -> Result<Argument, String> {

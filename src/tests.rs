@@ -4,6 +4,8 @@ mod tests {
     use crate::interpreter::{Interpreter, argument_to_utf8_lossy};
     use crate::parser::parse_input;
     use std::convert::TryInto;
+    use std::fs;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     #[test]
     fn test_parse_simple_function_call() {
@@ -125,6 +127,18 @@ mod tests {
                 }
                 _ => panic!("Expected Call"),
             }
+        }
+    }
+
+    #[test]
+    fn test_parse_string_literal_argument() {
+        let result = parse_input("message = \"Hi\\n\"").unwrap();
+        match result {
+            AST::Var { name, value } => {
+                assert_eq!(name, "message");
+                assert_eq!(value, Argument::Memory(b"Hi\n".to_vec()));
+            }
+            other => panic!("Expected variable assignment, got {:?}", other),
         }
     }
 
@@ -360,6 +374,35 @@ mod tests {
         let scalar_arg = Argument::ScalarTyped(ArgType::U16, scalar_val);
         let scalar_text = argument_to_utf8_lossy(&scalar_arg).unwrap();
         assert_eq!(scalar_text, "Ok");
+    }
+
+    #[test]
+    fn test_file_function_reads_file_into_memory() {
+        let mut interpreter = Interpreter::new();
+        let timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let file_path = std::env::temp_dir().join(format!(
+            "avx_explorer_test_{}_{}",
+            std::process::id(),
+            timestamp
+        ));
+        let data = b"File contents for testing";
+        fs::write(&file_path, data).expect("unable to write test file");
+
+        let input = format!("buf = file(\"{}\")", file_path.display());
+        let ast = parse_input(&input).expect("file() call should parse");
+        let result = interpreter
+            .execute(ast)
+            .expect("file() call should execute");
+
+        match result {
+            Argument::Memory(bytes) => assert_eq!(bytes, data),
+            other => panic!("Expected memory result from file(), got {:?}", other),
+        }
+
+        fs::remove_file(&file_path).expect("unable to clean up test file");
     }
 
     #[test]
