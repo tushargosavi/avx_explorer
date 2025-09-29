@@ -68,6 +68,15 @@ impl Interpreter {
             },
         ));
 
+        registry.register_instruction(Instruction::with_arg_range(
+            "range",
+            vec![ArgType::U64, ArgType::U64, ArgType::U64],
+            ArgType::Ptr,
+            2,
+            Some(3),
+            |_, args| execute_range_instruction(args),
+        ));
+
         // print_hex(value [, chunk_bits]) where chunk_bits in {8,16,32,64}; default 32
         registry.register_instruction(Instruction::with_arg_range(
             "print_hex",
@@ -1000,6 +1009,121 @@ fn argument_to_bytes(arg: &Argument) -> Result<Vec<u8>, String> {
             Err("Memory slice must be resolved before writing".to_string())
         }
     }
+}
+
+fn execute_range_instruction(args: &[Argument]) -> Result<Argument, String> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err("range expects 2 or 3 arguments".to_string());
+    }
+
+    let mut explicit_type: Option<ArgType> = None;
+
+    let (start_type, start_value) = extract_range_scalar(&args[0])?;
+    merge_range_type(&mut explicit_type, start_type)?;
+
+    let (end_type, end_value) = extract_range_scalar(&args[1])?;
+    merge_range_type(&mut explicit_type, end_type)?;
+
+    let step_arg = if args.len() == 3 {
+        let (step_type, step_value) = extract_range_scalar(&args[2])?;
+        merge_range_type(&mut explicit_type, step_type)?;
+        if step_value == 0 {
+            return Err("range step cannot be zero".to_string());
+        }
+        Some(step_value)
+    } else {
+        None
+    };
+
+    let value_type = explicit_type.unwrap_or(ArgType::U8);
+
+    let start = start_value as i128;
+    let end = end_value as i128;
+    let step = match step_arg {
+        Some(step_value) => {
+            let step_mag = step_value as i128;
+            if start <= end { step_mag } else { -step_mag }
+        }
+        None => {
+            if start < end {
+                1
+            } else if start > end {
+                -1
+            } else {
+                1
+            }
+        }
+    };
+
+    if step == 0 {
+        return Err("range step cannot be zero".to_string());
+    }
+
+    let mut bytes = Vec::new();
+    let mut current = start;
+    if step > 0 {
+        while current <= end {
+            append_value_as_type(&mut bytes, &value_type, current as u64)?;
+            current += step;
+        }
+    } else {
+        while current >= end {
+            append_value_as_type(&mut bytes, &value_type, current as u64)?;
+            current += step;
+        }
+    }
+
+    Ok(Argument::Memory(bytes))
+}
+
+fn extract_range_scalar(arg: &Argument) -> Result<(Option<ArgType>, u64), String> {
+    match arg {
+        Argument::Scalar(v) => Ok((None, *v)),
+        Argument::ScalarTyped(t, v) => Ok((Some(t.clone()), *v)),
+        other => Err(format!(
+            "range arguments must be scalar numbers (found {:?})",
+            other
+        )),
+    }
+}
+
+fn merge_range_type(target: &mut Option<ArgType>, new_type: Option<ArgType>) -> Result<(), String> {
+    if let Some(t) = new_type {
+        ensure_unsigned_scalar_type(&t)?;
+        if let Some(existing) = target {
+            if *existing != t {
+                return Err("range arguments specify conflicting scalar types".to_string());
+            }
+        } else {
+            *target = Some(t);
+        }
+    }
+    Ok(())
+}
+
+fn ensure_unsigned_scalar_type(arg_type: &ArgType) -> Result<(), String> {
+    match arg_type {
+        ArgType::U8 | ArgType::U16 | ArgType::U32 | ArgType::U64 => Ok(()),
+        _ => Err("range only supports u8/u16/u32/u64 element types".to_string()),
+    }
+}
+
+fn append_value_as_type(bytes: &mut Vec<u8>, arg_type: &ArgType, value: u64) -> Result<(), String> {
+    let width = match arg_type {
+        ArgType::U8 => 1,
+        ArgType::U16 => 2,
+        ArgType::U32 => 4,
+        ArgType::U64 => 8,
+        _ => {
+            return Err(
+                "Only unsigned scalar types (u8/u16/u32/u64) are supported in range initializers"
+                    .to_string(),
+            );
+        }
+    };
+    let le_bytes = value.to_le_bytes();
+    bytes.extend_from_slice(&le_bytes[..width]);
+    Ok(())
 }
 
 fn print_memory_hex(bytes: &[u8], chunk_bits: usize) {
