@@ -77,6 +77,30 @@ fn bytes_to_m256i(bytes: &[u8]) -> __m256i {
     unsafe { std::mem::transmute(lanes) }
 }
 
+fn load_vector_bytes<const N: usize>(
+    memory: &[u8],
+    offset: usize,
+    instr: &str,
+) -> Result<[u8; N], String> {
+    if offset > memory.len() {
+        return Err(format!(
+            "{} reading {} byte(s) at offset {} exceeds memory length {}",
+            instr,
+            N,
+            offset,
+            memory.len()
+        ));
+    }
+
+    let mut buffer = [0u8; N];
+    let available = memory.len() - offset;
+    let to_copy = available.min(N);
+    if to_copy > 0 {
+        buffer[..to_copy].copy_from_slice(&memory[offset..offset + to_copy]);
+    }
+    Ok(buffer)
+}
+
 fn ensure_alignment(offset: usize, alignment: usize, instr: &str) -> Result<(), String> {
     if offset % alignment != 0 {
         Err(format!(
@@ -919,18 +943,8 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             ensure_alignment(offset, 32, "_mm256_load_si256")?;
 
             let memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_load_si256")?;
-            let end = offset
-                .checked_add(32)
-                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
-            if end > memory.len() {
-                return Err(format!(
-                    "_mm256_load_si256 reading 32 byte(s) at offset {} exceeds memory length {}",
-                    offset,
-                    memory.len()
-                ));
-            }
-
-            let vec = bytes_to_m256i(&memory[offset..end]);
+            let bytes = load_vector_bytes::<32>(&memory, offset, "_mm256_load_si256")?;
+            let vec = bytes_to_m256i(&bytes);
             Ok(m256i_to_argument(vec))
         },
     ));
@@ -949,18 +963,8 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
 
             let offset = extract_offset(args.get(1))?;
             let memory = clone_memory_from_ptr(ctx, &args[0], "_mm256_loadu_si256")?;
-            let end = offset
-                .checked_add(32)
-                .ok_or_else(|| "Offset calculation overflowed".to_string())?;
-            if end > memory.len() {
-                return Err(format!(
-                    "_mm256_loadu_si256 reading 32 byte(s) at offset {} exceeds memory length {}",
-                    offset,
-                    memory.len()
-                ));
-            }
-
-            let vec = bytes_to_m256i(&memory[offset..end]);
+            let bytes = load_vector_bytes::<32>(&memory, offset, "_mm256_loadu_si256")?;
+            let vec = bytes_to_m256i(&bytes);
             Ok(m256i_to_argument(vec))
         },
     ));

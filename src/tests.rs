@@ -259,6 +259,94 @@ mod tests {
     }
 
     #[test]
+    fn test_mm512_loadu_si512_zero_pads_short_memory() {
+        let mut interpreter = Interpreter::new();
+        let input: Vec<u8> = (0u8..50u8).collect();
+        interpreter
+            .variables
+            .insert("input".to_string(), Argument::Memory(input.clone()));
+
+        let ast = AST::Assign {
+            dest: "data".to_string(),
+            child: Box::new(AST::Call {
+                name: "_mm512_loadu_si512".to_string(),
+                args: vec![Argument::Variable("input".to_string())],
+            }),
+        };
+
+        let result = interpreter.execute(ast).expect("load should succeed");
+
+        let mut expected_bytes = [0u8; 64];
+        expected_bytes[..input.len()].copy_from_slice(&input);
+
+        let assert_loaded = |arg: &Argument| match arg {
+            Argument::Array(ArgType::I512, bytes) => {
+                assert_eq!(bytes.len(), 64);
+                assert_eq!(&bytes[..], &expected_bytes);
+            }
+            other => panic!("Expected vector register, got {:?}", other),
+        };
+
+        assert_loaded(&result);
+        assert_loaded(
+            interpreter
+                .variables
+                .get("data")
+                .expect("variable should be stored"),
+        );
+        assert_loaded(
+            interpreter
+                .variables
+                .get("_res")
+                .expect("_res should contain result"),
+        );
+    }
+
+    #[test]
+    fn test_mm256_loadu_si256_zero_pads_short_memory() {
+        let mut interpreter = Interpreter::new();
+        let input: Vec<u8> = (0u8..20u8).collect();
+        interpreter
+            .variables
+            .insert("input".to_string(), Argument::Memory(input.clone()));
+
+        let ast = AST::Assign {
+            dest: "data".to_string(),
+            child: Box::new(AST::Call {
+                name: "_mm256_loadu_si256".to_string(),
+                args: vec![Argument::Variable("input".to_string())],
+            }),
+        };
+
+        let result = interpreter.execute(ast).expect("load should succeed");
+
+        let mut expected_bytes = [0u8; 64];
+        expected_bytes[..input.len()].copy_from_slice(&input);
+        let expected_len = ArgType::I256.vector_byte_len();
+
+        let assert_loaded = |arg: &Argument| match arg {
+            Argument::Array(ArgType::I256, bytes) => {
+                assert_eq!(&bytes[..expected_len], &expected_bytes[..expected_len]);
+            }
+            other => panic!("Expected vector register, got {:?}", other),
+        };
+
+        assert_loaded(&result);
+        assert_loaded(
+            interpreter
+                .variables
+                .get("data")
+                .expect("variable should be stored"),
+        );
+        assert_loaded(
+            interpreter
+                .variables
+                .get("_res")
+                .expect("_res should contain result"),
+        );
+    }
+
+    #[test]
     fn test_mem_initializer_with_type() {
         let mut interpreter = Interpreter::new();
         let ast = parse_input("a = mem[0x1u32, 0x23, 0x23, 0x4]").unwrap();
