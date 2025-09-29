@@ -5,6 +5,7 @@ use crate::bmi2::register_bmi2_instructions;
 use crate::sse2::register_sse2_instructions;
 use std::arch::x86_64::*;
 use std::collections::HashMap;
+use std::fs;
 
 pub struct Interpreter {
     pub variables: HashMap<String, Argument>,
@@ -141,6 +142,23 @@ impl Interpreter {
                 }
 
                 Ok(Argument::Scalar(0))
+            },
+        ));
+
+        registry.register_instruction(Instruction::with_arg_range(
+            "file",
+            vec![],
+            ArgType::Ptr,
+            1,
+            Some(1),
+            |_, args| {
+                if args.len() != 1 {
+                    return Err("file requires exactly 1 argument".to_string());
+                }
+                let path = argument_to_utf8_lossy(&args[0])?;
+                let bytes = fs::read(&path)
+                    .map_err(|err| format!("Failed to read file '{}': {}", path, err))?;
+                Ok(Argument::Memory(bytes))
             },
         ));
 
