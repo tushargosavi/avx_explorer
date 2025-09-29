@@ -230,6 +230,43 @@ mod tests {
     }
 
     #[test]
+    fn test_range_initializer_default_steps() {
+        let mut interpreter = Interpreter::new();
+
+        let ast = parse_input("buf = range(0, 4)").unwrap();
+        let result = interpreter.execute(ast).unwrap();
+        match result {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes, vec![0, 1, 2, 3, 4]);
+            }
+            other => panic!("Expected memory, got {:?}", other),
+        }
+
+        let ast = parse_input("down = range(5, 1)").unwrap();
+        let result = interpreter.execute(ast).unwrap();
+        match result {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes, vec![5, 4, 3, 2, 1]);
+            }
+            other => panic!("Expected memory, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_range_initializer_with_type_and_step() {
+        let mut interpreter = Interpreter::new();
+        let ast = parse_input("words = range(0u16, 6, 2)").unwrap();
+        let result = interpreter.execute(ast).unwrap();
+        match result {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes.len(), 8);
+                assert_eq!(bytes, vec![0, 0, 2, 0, 4, 0, 6, 0]);
+            }
+            other => panic!("Expected memory, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_memory_slice_assignment_and_lookup() {
         let mut interpreter = Interpreter::new();
         interpreter
