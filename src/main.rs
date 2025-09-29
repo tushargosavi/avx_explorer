@@ -134,6 +134,11 @@ fn handle_line(interpreter: &mut Interpreter, input: &str) -> bool {
         return true;
     }
 
+    if input == "env" {
+        interpreter.dump_environment();
+        return true;
+    }
+
     if input == "exit" {
         return false;
     }

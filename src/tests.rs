@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::ast::{AST, ArgType, Argument};
-    use crate::interpreter::{Interpreter, argument_to_utf8_lossy};
+    use crate::interpreter::{Interpreter, MemoryEntry, RegisterEntry, argument_to_utf8_lossy};
     use crate::parser::parse_input;
     use std::convert::TryInto;
     use std::fs;
@@ -500,6 +500,59 @@ mod tests {
 
         let result = interpreter.execute(ast).unwrap();
         assert_eq!(result, Argument::Scalar(42));
+    }
+
+    #[test]
+    fn test_environment_snapshot_splits_memory_and_registers() {
+        let mut interpreter = Interpreter::new();
+        interpreter
+            .variables
+            .insert("buf".to_string(), Argument::Memory(vec![1, 2, 3, 4, 5]));
+        interpreter
+            .variables
+            .insert("count".to_string(), Argument::Scalar(7));
+
+        let snapshot = interpreter.environment_snapshot();
+
+        assert_eq!(
+            snapshot.memory,
+            vec![MemoryEntry {
+                name: "buf".to_string(),
+                length: 5,
+            }]
+        );
+
+        assert_eq!(
+            snapshot.registers,
+            vec![RegisterEntry {
+                name: "count".to_string(),
+                type_name: "Scalar".to_string(),
+                value: "7".to_string(),
+            }]
+        );
+    }
+
+    #[test]
+    fn test_environment_snapshot_array_preview_truncates() {
+        let mut interpreter = Interpreter::new();
+        let mut array_bytes = [0u8; 64];
+        for (idx, byte) in array_bytes.iter_mut().enumerate() {
+            *byte = idx as u8;
+        }
+        interpreter
+            .variables
+            .insert("arr".to_string(), Argument::Array(ArgType::U8, array_bytes));
+
+        let snapshot = interpreter.environment_snapshot();
+        let entry = snapshot
+            .registers
+            .iter()
+            .find(|entry| entry.name == "arr")
+            .expect("array entry should be present");
+
+        assert_eq!(entry.type_name, "Array<U8>");
+        assert!(entry.value.starts_with("b[0, 1, 2, 3"));
+        assert!(entry.value.ends_with("…]"));
     }
 
     #[test]

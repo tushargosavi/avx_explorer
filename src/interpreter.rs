@@ -7,6 +7,25 @@ use std::arch::x86_64::*;
 use std::collections::HashMap;
 use std::fs;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MemoryEntry {
+    pub name: String,
+    pub length: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegisterEntry {
+    pub name: String,
+    pub type_name: String,
+    pub value: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EnvironmentSnapshot {
+    pub memory: Vec<MemoryEntry>,
+    pub registers: Vec<RegisterEntry>,
+}
+
 pub struct Interpreter {
     pub variables: HashMap<String, Argument>,
     pub function_registry: FunctionRegistry,
@@ -353,6 +372,55 @@ impl Interpreter {
         result
     }
 
+    pub fn environment_snapshot(&self) -> EnvironmentSnapshot {
+        let mut memory = Vec::new();
+        let mut registers = Vec::new();
+
+        for (name, value) in &self.variables {
+            match value {
+                Argument::Memory(bytes) => memory.push(MemoryEntry {
+                    name: name.clone(),
+                    length: bytes.len(),
+                }),
+                other => {
+                    let (type_name, value_repr) = describe_argument_for_env(other);
+                    registers.push(RegisterEntry {
+                        name: name.clone(),
+                        type_name,
+                        value: value_repr,
+                    });
+                }
+            }
+        }
+
+        memory.sort_by(|a, b| a.name.cmp(&b.name));
+        registers.sort_by(|a, b| a.name.cmp(&b.name));
+
+        EnvironmentSnapshot { memory, registers }
+    }
+
+    pub fn dump_environment(&self) {
+        let snapshot = self.environment_snapshot();
+
+        println!("Memory:");
+        if snapshot.memory.is_empty() {
+            println!("  <none>");
+        } else {
+            for entry in &snapshot.memory {
+                println!("  {} ({} bytes)", entry.name, entry.length);
+            }
+        }
+
+        println!("Registers:");
+        if snapshot.registers.is_empty() {
+            println!("  <none>");
+        } else {
+            for entry in &snapshot.registers {
+                println!("  {}: {} = {}", entry.name, entry.type_name, entry.value);
+            }
+        }
+    }
+
     fn execute_call(&mut self, name: String, args: Vec<Argument>) -> Result<Argument, String> {
         if let Some(func) = self.function_registry.find(&name) {
             let resolved_args: Vec<Argument> = if func.arguments().is_empty() {
@@ -530,6 +598,174 @@ fn display_argument_simple(arg: &Argument) {
         }
         Argument::Memory(bytes) => println!("memory[{} bytes]", bytes.len()),
         Argument::MemorySlice { name, .. } => println!("memory_slice<{}>", name),
+    }
+}
+
+fn describe_argument_for_env(arg: &Argument) -> (String, String) {
+    match arg {
+        Argument::Scalar(val) => ("Scalar".to_string(), val.to_string()),
+        Argument::ScalarTyped(arg_type, val) => {
+            (format!("Scalar<{:?}>", arg_type), val.to_string())
+        }
+        Argument::Array(arg_type, bytes) => (
+            format!("Array<{:?}>", arg_type),
+            format_array_preview(arg_type, bytes),
+        ),
+        Argument::Variable(name) => ("VariableRef".to_string(), name.clone()),
+        Argument::MemorySlice { name, access } => (
+            "MemorySlice".to_string(),
+            format!("{}{}", name, format_memory_access(access)),
+        ),
+        Argument::Memory(bytes) => ("Memory".to_string(), format!("{} bytes", bytes.len())),
+    }
+}
+
+fn format_array_preview(arg_type: &ArgType, bytes: &[u8; 64]) -> String {
+    let valid = arg_type.vector_byte_len().min(bytes.len());
+    let data = &bytes[..valid];
+    match arg_type {
+        ArgType::U8 => {
+            let limit = 16;
+            let total = data.len();
+            let values: Vec<String> = data.iter().take(limit).map(|v| v.to_string()).collect();
+            format_list_with_limit("b", values, total > limit)
+        }
+        ArgType::U16 => {
+            let limit = 16;
+            let total = data.len() / 2;
+            let values: Vec<String> = data
+                .chunks(2)
+                .take(limit)
+                .map(|chunk| {
+                    u16::from_le_bytes([chunk[0], *chunk.get(1).unwrap_or(&0)]).to_string()
+                })
+                .collect();
+            format_list_with_limit("w", values, total > limit)
+        }
+        ArgType::U32 => {
+            let limit = 8;
+            let total = data.len() / 4;
+            let values: Vec<String> = data
+                .chunks(4)
+                .take(limit)
+                .map(|chunk| {
+                    u32::from_le_bytes([
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                        *chunk.get(3).unwrap_or(&0),
+                    ])
+                    .to_string()
+                })
+                .collect();
+            format_list_with_limit("dw", values, total > limit)
+        }
+        ArgType::U64 => {
+            let limit = 8;
+            let total = data.len() / 8;
+            let values: Vec<String> = data
+                .chunks(8)
+                .take(limit)
+                .map(|chunk| {
+                    u64::from_le_bytes([
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                        *chunk.get(3).unwrap_or(&0),
+                        *chunk.get(4).unwrap_or(&0),
+                        *chunk.get(5).unwrap_or(&0),
+                        *chunk.get(6).unwrap_or(&0),
+                        *chunk.get(7).unwrap_or(&0),
+                    ])
+                    .to_string()
+                })
+                .collect();
+            format_list_with_limit("qw", values, total > limit)
+        }
+        ArgType::I128 => {
+            let limit = 4;
+            let total = data.len() / 4;
+            let values: Vec<String> = data
+                .chunks(4)
+                .take(limit)
+                .map(|chunk| {
+                    u32::from_le_bytes([
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                        *chunk.get(3).unwrap_or(&0),
+                    ])
+                    .to_string()
+                })
+                .collect();
+            format_list_with_limit("i128", values, total > limit)
+        }
+        ArgType::I256 => {
+            let limit = 8;
+            let total = data.len() / 4;
+            let values: Vec<String> = data
+                .chunks(4)
+                .take(limit)
+                .map(|chunk| {
+                    u32::from_le_bytes([
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                        *chunk.get(3).unwrap_or(&0),
+                    ])
+                    .to_string()
+                })
+                .collect();
+            format_list_with_limit("i256", values, total > limit)
+        }
+        ArgType::I512 => {
+            let limit = 8;
+            let total = data.len() / 8;
+            let values: Vec<String> = data
+                .chunks(8)
+                .take(limit)
+                .map(|chunk| {
+                    u64::from_le_bytes([
+                        chunk[0],
+                        *chunk.get(1).unwrap_or(&0),
+                        *chunk.get(2).unwrap_or(&0),
+                        *chunk.get(3).unwrap_or(&0),
+                        *chunk.get(4).unwrap_or(&0),
+                        *chunk.get(5).unwrap_or(&0),
+                        *chunk.get(6).unwrap_or(&0),
+                        *chunk.get(7).unwrap_or(&0),
+                    ])
+                    .to_string()
+                })
+                .collect();
+            format_list_with_limit("i512", values, total > limit)
+        }
+        ArgType::Ptr => {
+            let mut tmp = [0u8; 8];
+            for (idx, byte) in data.iter().take(8).enumerate() {
+                tmp[idx] = *byte;
+            }
+            format!("ptr[0x{:016x}]", u64::from_le_bytes(tmp))
+        }
+    }
+}
+
+fn format_list_with_limit(label: &str, values: Vec<String>, truncated: bool) -> String {
+    let mut inner = values.join(", ");
+    if truncated {
+        if !inner.is_empty() {
+            inner.push_str(", …");
+        } else {
+            inner.push('…');
+        }
+    }
+    format!("{}[{}]", label, inner)
+}
+
+fn format_memory_access(access: &MemoryAccess) -> String {
+    match access {
+        MemoryAccess::Index(idx) => format!("[{}]", idx),
+        MemoryAccess::Range { start, end } => format!("[{}..{})", start, end),
     }
 }
 
