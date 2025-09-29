@@ -1,5 +1,7 @@
 use crate::ast::*;
 
+const ARRAY_TYPES: &[&str] = &["bits", "b", "w", "dw", "qw"];
+
 pub fn parse_input(input: &str) -> Result<AST, String> {
     let input = input.trim();
 
@@ -26,6 +28,14 @@ pub fn parse_input(input: &str) -> Result<AST, String> {
                 Err(e) => Err(e),
             }
         } else {
+            if let Some((name, access)) = parse_memory_target(&dest)? {
+                let value = parse_argument(value_input)?;
+                return Ok(AST::MemoryStore {
+                    name,
+                    access,
+                    value,
+                });
+            }
             match parse_argument(value_input) {
                 Ok(arg) => Ok(AST::Var {
                     name: dest,
@@ -41,6 +51,8 @@ pub fn parse_input(input: &str) -> Result<AST, String> {
         Ok(AST::VarLookup {
             name: input.to_string(),
         })
+    } else if let Some((name, access)) = parse_memory_target(input)? {
+        Ok(AST::MemorySliceLookup { name, access })
     } else {
         Err("Invalid input format".to_string())
     }
@@ -99,9 +111,18 @@ fn parse_call(input: &str) -> Result<AST, String> {
 }
 
 fn parse_argument(input: &str) -> Result<Argument, String> {
-    // memory constructor: mem[SIZE]
+    // memory constructor: mem[SIZE] or mem[values...]
     if input.starts_with("mem[") && input.ends_with(']') {
         return parse_memory(input);
+    }
+    if input.starts_with("zero[") && input.ends_with(']') {
+        return parse_zero(input);
+    }
+    if let Some(arg) = try_parse_memory_slice_argument(input)? {
+        return Ok(arg);
+    }
+    if input.starts_with('[') && input.ends_with(']') {
+        return parse_memory_literal(input);
     }
     if input.contains('[') && input.ends_with(']') {
         parse_array(input)
@@ -183,7 +204,11 @@ fn parse_array(input: &str) -> Result<Argument, String> {
                 })
                 .collect::<Result<Vec<_>, _>>()?;
 
-            let arg_type = ArgType::from_value_count(&values);
+            let arg_type = match array_type {
+                "b" => ArgType::U8,
+                "w" | "dw" | "qw" => ArgType::I256,
+                _ => ArgType::from_value_count(&values),
+            };
             let mut rbytes = [0u8; 64];
 
             match array_type {
@@ -219,7 +244,7 @@ fn parse_array(input: &str) -> Result<Argument, String> {
 }
 
 fn parse_memory(input: &str) -> Result<Argument, String> {
-    // Format: mem[SIZE]
+    // Format: mem[SIZE] or mem[val, val, ...]
     if !input.starts_with("mem[") || !input.ends_with(']') {
         return Err("Invalid memory initializer".to_string());
     }
@@ -227,14 +252,185 @@ fn parse_memory(input: &str) -> Result<Argument, String> {
     if size_str.trim().is_empty() {
         return Err("mem[] requires a size".to_string());
     }
-    // Reuse number parser so hex/bin/dec work; expect Scalar or ScalarTyped
-    let size_arg = parse_number(size_str)?;
+    if size_str.contains(',') {
+        let bytes = parse_memory_values(size_str)?;
+        Ok(Argument::Memory(bytes))
+    } else {
+        // Reuse number parser so hex/bin/dec work; expect Scalar or ScalarTyped
+        let size_arg = parse_number(size_str)?;
+        let size = match size_arg {
+            Argument::Scalar(v) => v as usize,
+            Argument::ScalarTyped(_, v) => v as usize,
+            _ => return Err("mem[size] size must be a scalar number".to_string()),
+        };
+        Ok(Argument::Memory(vec![0u8; size]))
+    }
+}
+
+fn parse_zero(input: &str) -> Result<Argument, String> {
+    if !input.starts_with("zero[") || !input.ends_with(']') {
+        return Err("Invalid zero initializer".to_string());
+    }
+    let size_str = &input[5..input.len() - 1];
+    if size_str.trim().is_empty() {
+        return Err("zero[] requires a size".to_string());
+    }
+    let size_arg = parse_number(size_str.trim())?;
     let size = match size_arg {
         Argument::Scalar(v) => v as usize,
         Argument::ScalarTyped(_, v) => v as usize,
-        _ => return Err("mem[size] size must be a scalar number".to_string()),
+        _ => return Err("zero[size] size must be a scalar number".to_string()),
     };
     Ok(Argument::Memory(vec![0u8; size]))
+}
+
+fn parse_memory_literal(input: &str) -> Result<Argument, String> {
+    if !input.starts_with('[') || !input.ends_with(']') {
+        return Err("Invalid memory literal".to_string());
+    }
+    let values_str = &input[1..input.len() - 1];
+    if values_str.trim().is_empty() {
+        return Ok(Argument::Memory(Vec::new()));
+    }
+    let bytes = parse_memory_values(values_str)?;
+    Ok(Argument::Memory(bytes))
+}
+
+fn parse_memory_values(values_str: &str) -> Result<Vec<u8>, String> {
+    let mut bytes = Vec::new();
+    let mut current_type = ArgType::U8;
+    for raw in values_str.split(',') {
+        let token = raw.trim();
+        if token.is_empty() {
+            continue;
+        }
+        let number = parse_number(token)?;
+        match number {
+            Argument::ScalarTyped(arg_type, value) => {
+                current_type = arg_type;
+                append_value_as_type(&mut bytes, &current_type, value)?;
+            }
+            Argument::Scalar(value) => {
+                append_value_as_type(&mut bytes, &current_type, value)?;
+            }
+            _ => {
+                return Err("Memory initializers must be scalar numbers".to_string());
+            }
+        }
+    }
+    Ok(bytes)
+}
+
+fn append_value_as_type(bytes: &mut Vec<u8>, arg_type: &ArgType, value: u64) -> Result<(), String> {
+    let width = match arg_type {
+        ArgType::U8 => 1,
+        ArgType::U16 => 2,
+        ArgType::U32 => 4,
+        ArgType::U64 => 8,
+        _ => {
+            return Err(
+                "Only unsigned scalar types (u8/u16/u32/u64) are supported in memory initializers"
+                    .to_string(),
+            );
+        }
+    };
+    let le_bytes = value.to_le_bytes();
+    bytes.extend_from_slice(&le_bytes[..width]);
+    Ok(())
+}
+
+fn try_parse_memory_slice_argument(input: &str) -> Result<Option<Argument>, String> {
+    if !input.ends_with(']') {
+        return Ok(None);
+    }
+    let open = match input.find('[') {
+        Some(idx) => idx,
+        None => return Ok(None),
+    };
+    let prefix = input[..open].trim();
+    if prefix.is_empty() {
+        return Ok(None);
+    }
+    if ARRAY_TYPES.contains(&prefix) {
+        return Ok(None);
+    }
+    if !prefix
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '_')
+    {
+        return Ok(None);
+    }
+    let inner = &input[open + 1..input.len() - 1];
+    if inner.contains(',') {
+        return Ok(None);
+    }
+    let access = parse_memory_access(inner)?;
+    Ok(Some(Argument::MemorySlice {
+        name: prefix.to_string(),
+        access,
+    }))
+}
+
+fn parse_memory_target(input: &str) -> Result<Option<(String, MemoryAccess)>, String> {
+    if !input.ends_with(']') {
+        return Ok(None);
+    }
+    let open = match input.find('[') {
+        Some(idx) => idx,
+        None => return Ok(None),
+    };
+    let name = input[..open].trim();
+    if name.is_empty() {
+        return Ok(None);
+    }
+    if ARRAY_TYPES.contains(&name) {
+        return Ok(None);
+    }
+    if !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+        return Ok(None);
+    }
+    let inner = &input[open + 1..input.len() - 1];
+    if inner.trim().is_empty() {
+        return Err("Memory slice requires an index or range".to_string());
+    }
+    if inner.contains(',') {
+        return Ok(None);
+    }
+    let access = parse_memory_access(inner)?;
+    Ok(Some((name.to_string(), access)))
+}
+
+fn parse_memory_access(input: &str) -> Result<MemoryAccess, String> {
+    let trimmed = input.trim();
+    if trimmed.is_empty() {
+        return Err("Memory slice requires an index or range".to_string());
+    }
+    if let Some(range_pos) = trimmed.find("..") {
+        let start_str = trimmed[..range_pos].trim();
+        let end_str = trimmed[range_pos + 2..].trim();
+        if end_str.is_empty() {
+            return Err("Memory slice requires an end for ranges".to_string());
+        }
+        let start = if start_str.is_empty() {
+            0
+        } else {
+            parse_slice_bound(start_str)?
+        };
+        let end = parse_slice_bound(end_str)?;
+        Ok(MemoryAccess::Range { start, end })
+    } else {
+        let idx = parse_slice_bound(trimmed)?;
+        Ok(MemoryAccess::Index(idx))
+    }
+}
+
+fn parse_slice_bound(token: &str) -> Result<usize, String> {
+    let arg = parse_number(token)?;
+    match arg {
+        Argument::Scalar(v) => Ok(v as usize),
+        Argument::ScalarTyped(_, v) => Ok(v as usize),
+        _ => Err("Slice bounds must be scalar numbers".to_string()),
+    }
 }
 
 fn parse_number(input: &str) -> Result<Argument, String> {

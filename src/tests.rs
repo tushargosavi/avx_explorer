@@ -201,6 +201,58 @@ mod tests {
     }
 
     #[test]
+    fn test_mem_initializer_with_type() {
+        let mut interpreter = Interpreter::new();
+        let ast = parse_input("a = mem[0x1u32, 0x23, 0x23, 0x4]").unwrap();
+        let result = interpreter.execute(ast).unwrap();
+        match result {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes.len(), 16);
+                assert_eq!(&bytes[0..4], &[0x01, 0x00, 0x00, 0x00]);
+                assert_eq!(&bytes[4..8], &[0x23, 0x00, 0x00, 0x00]);
+            }
+            other => panic!("Expected memory, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_zero_initializer() {
+        let mut interpreter = Interpreter::new();
+        let ast = parse_input("buf = zero[10]").unwrap();
+        let result = interpreter.execute(ast).unwrap();
+        match result {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes.len(), 10);
+                assert!(bytes.iter().all(|&b| b == 0));
+            }
+            other => panic!("Expected memory, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_memory_slice_assignment_and_lookup() {
+        let mut interpreter = Interpreter::new();
+        interpreter
+            .execute(parse_input("buf = mem[16]").unwrap())
+            .unwrap();
+        interpreter
+            .execute(parse_input("buf[0] = 0x1122u16").unwrap())
+            .unwrap();
+        interpreter
+            .execute(parse_input("buf[2..6] = [0x33, 0x44, 0x55, 0x66]").unwrap())
+            .unwrap();
+        let slice = interpreter
+            .execute(parse_input("buf[0..6]").unwrap())
+            .unwrap();
+        match slice {
+            Argument::Memory(bytes) => {
+                assert_eq!(bytes, vec![0x22, 0x11, 0x33, 0x44, 0x55, 0x66]);
+            }
+            other => panic!("Expected memory slice, got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_sse2_add_epi32() {
         let mut interpreter = Interpreter::new();
 

@@ -183,6 +183,7 @@ pub enum Argument {
     Scalar(u64),
     ScalarTyped(ArgType, u64),
     Variable(String),
+    MemorySlice { name: String, access: MemoryAccess },
 }
 
 impl fmt::Debug for Argument {
@@ -204,16 +205,47 @@ impl fmt::Debug for Argument {
                 .field(val)
                 .finish(),
             Argument::Variable(name) => f.debug_tuple("Variable").field(name).finish(),
+            Argument::MemorySlice { name, access } => f
+                .debug_struct("MemorySlice")
+                .field("name", name)
+                .field("access", access)
+                .finish(),
         }
     }
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum MemoryAccess {
+    Index(usize),
+    Range { start: usize, end: usize },
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum AST {
-    Call { name: String, args: Vec<Argument> },
-    Var { name: String, value: Argument },
-    Assign { dest: String, child: Box<AST> },
-    VarLookup { name: String },
+    Call {
+        name: String,
+        args: Vec<Argument>,
+    },
+    Var {
+        name: String,
+        value: Argument,
+    },
+    Assign {
+        dest: String,
+        child: Box<AST>,
+    },
+    VarLookup {
+        name: String,
+    },
+    MemoryStore {
+        name: String,
+        access: MemoryAccess,
+        value: Argument,
+    },
+    MemorySliceLookup {
+        name: String,
+        access: MemoryAccess,
+    },
 }
 
 impl AST {
@@ -244,6 +276,78 @@ impl AST {
             AST::Var { .. } => Ok(()),
             AST::Assign { child, .. } => child.validate(registry),
             AST::VarLookup { .. } => Ok(()),
+            AST::MemoryStore { .. } => Ok(()),
+            AST::MemorySliceLookup { .. } => Ok(()),
+        }
+    }
+}
+
+impl MemoryAccess {
+    pub fn for_lookup(&self, len: usize) -> Result<(usize, usize), String> {
+        match self {
+            MemoryAccess::Index(idx) => {
+                if *idx >= len {
+                    return Err(format!(
+                        "Memory index {} is out of bounds for length {}",
+                        idx, len
+                    ));
+                }
+                Ok((*idx, idx + 1))
+            }
+            MemoryAccess::Range { start, end } => {
+                if end < start {
+                    return Err(format!(
+                        "Invalid memory range {}..{} (end before start)",
+                        start, end
+                    ));
+                }
+                if *end > len {
+                    return Err(format!(
+                        "Memory range {}..{} exceeds length {}",
+                        start, end, len
+                    ));
+                }
+                Ok((*start, *end))
+            }
+        }
+    }
+
+    pub fn for_assignment(&self, len: usize, value_len: usize) -> Result<(usize, usize), String> {
+        match self {
+            MemoryAccess::Index(idx) => {
+                let end = idx
+                    .checked_add(value_len)
+                    .ok_or_else(|| "Index calculation overflowed".to_string())?;
+                if end > len {
+                    return Err(format!(
+                        "Writing {} byte(s) at index {} exceeds memory length {}",
+                        value_len, idx, len
+                    ));
+                }
+                Ok((*idx, end))
+            }
+            MemoryAccess::Range { start, end } => {
+                if end < start {
+                    return Err(format!(
+                        "Invalid memory range {}..{} (end before start)",
+                        start, end
+                    ));
+                }
+                let expected = end - start;
+                if expected != value_len {
+                    return Err(format!(
+                        "Slice {}..{} expects {} byte(s) but {} provided",
+                        start, end, expected, value_len
+                    ));
+                }
+                if *end > len {
+                    return Err(format!(
+                        "Memory range {}..{} exceeds length {}",
+                        start, end, len
+                    ));
+                }
+                Ok((*start, *end))
+            }
         }
     }
 }
