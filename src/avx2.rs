@@ -968,6 +968,115 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
         },
     ));
 
+    // align operations
+    registry.register_instruction(Instruction::new(
+        "_mm256_alignr_epi8",
+        vec![ArgType::I256, ArgType::I256, ArgType::U32],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 3 {
+                return Err("_mm256_alignr_epi8 requires 3 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let b = args[1].to_i256();
+            let imm = (args[2].to_u32() & 0xFF) as i32;
+            let res = unsafe {
+                match imm {
+                    0 => _mm256_alignr_epi8::<0>(a, b),
+                    1 => _mm256_alignr_epi8::<1>(a, b),
+                    2 => _mm256_alignr_epi8::<2>(a, b),
+                    3 => _mm256_alignr_epi8::<3>(a, b),
+                    4 => _mm256_alignr_epi8::<4>(a, b),
+                    5 => _mm256_alignr_epi8::<5>(a, b),
+                    6 => _mm256_alignr_epi8::<6>(a, b),
+                    7 => _mm256_alignr_epi8::<7>(a, b),
+                    8 => _mm256_alignr_epi8::<8>(a, b),
+                    9 => _mm256_alignr_epi8::<9>(a, b),
+                    10 => _mm256_alignr_epi8::<10>(a, b),
+                    11 => _mm256_alignr_epi8::<11>(a, b),
+                    12 => _mm256_alignr_epi8::<12>(a, b),
+                    13 => _mm256_alignr_epi8::<13>(a, b),
+                    14 => _mm256_alignr_epi8::<14>(a, b),
+                    15 => _mm256_alignr_epi8::<15>(a, b),
+                    16 => _mm256_alignr_epi8::<16>(a, b),
+                    17 => _mm256_alignr_epi8::<17>(a, b),
+                    18 => _mm256_alignr_epi8::<18>(a, b),
+                    19 => _mm256_alignr_epi8::<19>(a, b),
+                    20 => _mm256_alignr_epi8::<20>(a, b),
+                    21 => _mm256_alignr_epi8::<21>(a, b),
+                    22 => _mm256_alignr_epi8::<22>(a, b),
+                    23 => _mm256_alignr_epi8::<23>(a, b),
+                    24 => _mm256_alignr_epi8::<24>(a, b),
+                    25 => _mm256_alignr_epi8::<25>(a, b),
+                    26 => _mm256_alignr_epi8::<26>(a, b),
+                    27 => _mm256_alignr_epi8::<27>(a, b),
+                    28 => _mm256_alignr_epi8::<28>(a, b),
+                    29 => _mm256_alignr_epi8::<29>(a, b),
+                    30 => _mm256_alignr_epi8::<30>(a, b),
+                    31 => _mm256_alignr_epi8::<31>(a, b),
+                    32 => _mm256_alignr_epi8::<32>(a, b),
+                    _ => _mm256_setzero_si256(),
+                }
+            };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm256_alignl_epi8",
+        vec![ArgType::I256, ArgType::I256, ArgType::U32],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 3 {
+                return Err("_mm256_alignl_epi8 requires 3 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let b = args[1].to_i256();
+            let imm = (args[2].to_u32() & 0xFF) as i32;
+            let res = unsafe {
+                match imm {
+                    0 => _mm256_alignr_epi8::<0>(b, a),
+                    1 => _mm256_alignr_epi8::<1>(b, a),
+                    2 => _mm256_alignr_epi8::<2>(b, a),
+                    3 => _mm256_alignr_epi8::<3>(b, a),
+                    4 => _mm256_alignr_epi8::<4>(b, a),
+                    5 => _mm256_alignr_epi8::<5>(b, a),
+                    6 => _mm256_alignr_epi8::<6>(b, a),
+                    7 => _mm256_alignr_epi8::<7>(b, a),
+                    8 => _mm256_alignr_epi8::<8>(b, a),
+                    9 => _mm256_alignr_epi8::<9>(b, a),
+                    10 => _mm256_alignr_epi8::<10>(b, a),
+                    11 => _mm256_alignr_epi8::<11>(b, a),
+                    12 => _mm256_alignr_epi8::<12>(b, a),
+                    13 => _mm256_alignr_epi8::<13>(b, a),
+                    14 => _mm256_alignr_epi8::<14>(b, a),
+                    15 => _mm256_alignr_epi8::<15>(b, a),
+                    16 => _mm256_alignr_epi8::<16>(b, a),
+                    17 => _mm256_alignr_epi8::<17>(b, a),
+                    18 => _mm256_alignr_epi8::<18>(b, a),
+                    19 => _mm256_alignr_epi8::<19>(b, a),
+                    20 => _mm256_alignr_epi8::<20>(b, a),
+                    21 => _mm256_alignr_epi8::<21>(b, a),
+                    22 => _mm256_alignr_epi8::<22>(b, a),
+                    23 => _mm256_alignr_epi8::<23>(b, a),
+                    24 => _mm256_alignr_epi8::<24>(b, a),
+                    25 => _mm256_alignr_epi8::<25>(b, a),
+                    26 => _mm256_alignr_epi8::<26>(b, a),
+                    27 => _mm256_alignr_epi8::<27>(b, a),
+                    28 => _mm256_alignr_epi8::<28>(b, a),
+                    29 => _mm256_alignr_epi8::<29>(b, a),
+                    30 => _mm256_alignr_epi8::<30>(b, a),
+                    31 => _mm256_alignr_epi8::<31>(b, a),
+                    32 => _mm256_alignr_epi8::<32>(b, a),
+                    _ => _mm256_setzero_si256(),
+                }
+            };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+
     // blend/shuffle/permute (non-imm variants)
     registry.register_instruction(Instruction::new(
         "_mm256_blendv_epi8",
@@ -1184,4 +1293,102 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             Ok(Argument::Memory(new_memory))
         },
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mm256_alignr_by_imm(a: __m256i, b: __m256i, imm: i32) -> __m256i {
+        unsafe {
+            match imm {
+                0 => _mm256_alignr_epi8::<0>(a, b),
+                1 => _mm256_alignr_epi8::<1>(a, b),
+                2 => _mm256_alignr_epi8::<2>(a, b),
+                3 => _mm256_alignr_epi8::<3>(a, b),
+                4 => _mm256_alignr_epi8::<4>(a, b),
+                5 => _mm256_alignr_epi8::<5>(a, b),
+                6 => _mm256_alignr_epi8::<6>(a, b),
+                7 => _mm256_alignr_epi8::<7>(a, b),
+                8 => _mm256_alignr_epi8::<8>(a, b),
+                9 => _mm256_alignr_epi8::<9>(a, b),
+                10 => _mm256_alignr_epi8::<10>(a, b),
+                11 => _mm256_alignr_epi8::<11>(a, b),
+                12 => _mm256_alignr_epi8::<12>(a, b),
+                13 => _mm256_alignr_epi8::<13>(a, b),
+                14 => _mm256_alignr_epi8::<14>(a, b),
+                15 => _mm256_alignr_epi8::<15>(a, b),
+                16 => _mm256_alignr_epi8::<16>(a, b),
+                17 => _mm256_alignr_epi8::<17>(a, b),
+                18 => _mm256_alignr_epi8::<18>(a, b),
+                19 => _mm256_alignr_epi8::<19>(a, b),
+                20 => _mm256_alignr_epi8::<20>(a, b),
+                21 => _mm256_alignr_epi8::<21>(a, b),
+                22 => _mm256_alignr_epi8::<22>(a, b),
+                23 => _mm256_alignr_epi8::<23>(a, b),
+                24 => _mm256_alignr_epi8::<24>(a, b),
+                25 => _mm256_alignr_epi8::<25>(a, b),
+                26 => _mm256_alignr_epi8::<26>(a, b),
+                27 => _mm256_alignr_epi8::<27>(a, b),
+                28 => _mm256_alignr_epi8::<28>(a, b),
+                29 => _mm256_alignr_epi8::<29>(a, b),
+                30 => _mm256_alignr_epi8::<30>(a, b),
+                31 => _mm256_alignr_epi8::<31>(a, b),
+                32 => _mm256_alignr_epi8::<32>(a, b),
+                _ => _mm256_setzero_si256(),
+            }
+        }
+    }
+
+    #[test]
+    fn alignr_i256_produces_expected_bytes() {
+        let mut a_bytes = [0u8; 32];
+        let mut b_bytes = [0u8; 32];
+        for i in 0..32 {
+            a_bytes[i] = 0x10 + i as u8;
+            b_bytes[i] = 0x80 + i as u8;
+        }
+
+        let a = unsafe { std::mem::transmute::<[u8; 32], __m256i>(a_bytes) };
+        let b = unsafe { std::mem::transmute::<[u8; 32], __m256i>(b_bytes) };
+
+        let res = mm256_alignr_by_imm(a, b, 4);
+        let bytes = m256i_to_bytes(res);
+        let expected: [u8; 32] = [
+            132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 16, 17, 18, 19, 148, 149,
+            150, 151, 152, 153, 154, 155, 156, 157, 158, 159, 32, 33, 34, 35,
+        ];
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn alignl_i256_produces_expected_bytes() {
+        let mut a_bytes = [0u8; 32];
+        let mut b_bytes = [0u8; 32];
+        for i in 0..32 {
+            a_bytes[i] = 0x10 + i as u8;
+            b_bytes[i] = 0x80 + i as u8;
+        }
+
+        let a = unsafe { std::mem::transmute::<[u8; 32], __m256i>(a_bytes) };
+        let b = unsafe { std::mem::transmute::<[u8; 32], __m256i>(b_bytes) };
+
+        let res = mm256_alignr_by_imm(b, a, 4);
+        let bytes = m256i_to_bytes(res);
+        let expected: [u8; 32] = [
+            20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 128, 129, 130, 131, 36, 37, 38, 39, 40,
+            41, 42, 43, 44, 45, 46, 47, 144, 145, 146, 147,
+        ];
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn align_i256_zeroes_when_shift_exceeds_lane() {
+        let a = unsafe { std::mem::transmute::<[u8; 32], __m256i>([1u8; 32]) };
+        let b = unsafe { std::mem::transmute::<[u8; 32], __m256i>([2u8; 32]) };
+
+        let res = mm256_alignr_by_imm(a, b, 64);
+        let bytes = m256i_to_bytes(res);
+        assert!(bytes.iter().all(|&byte| byte == 0));
+    }
 }

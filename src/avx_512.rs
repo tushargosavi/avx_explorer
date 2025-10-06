@@ -123,6 +123,15 @@ fn require_avx512dq() -> Result<(), String> {
     }
 }
 
+#[inline]
+fn require_avx512bw() -> Result<(), String> {
+    if !is_x86_feature_detected!("avx512bw") {
+        Err("AVX-512BW not supported on this CPU/runtime".to_string())
+    } else {
+        Ok(())
+    }
+}
+
 pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
     // set1/broadcast
     registry.register_instruction(Instruction::new(
@@ -251,6 +260,181 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             memory[offset..end].copy_from_slice(&bytes);
 
             Ok(Argument::Memory(memory))
+        },
+    ));
+
+    // align operations
+    registry.register_instruction(Instruction::new(
+        "_mm512_alignr_epi8",
+        vec![ArgType::I512, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512bw()?;
+            if args.len() != 3 {
+                return Err("_mm512_alignr_epi8 requires 3 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let b = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0xFF) as i32;
+            let res = unsafe {
+                match imm {
+                    0 => _mm512_alignr_epi8::<0>(a, b),
+                    1 => _mm512_alignr_epi8::<1>(a, b),
+                    2 => _mm512_alignr_epi8::<2>(a, b),
+                    3 => _mm512_alignr_epi8::<3>(a, b),
+                    4 => _mm512_alignr_epi8::<4>(a, b),
+                    5 => _mm512_alignr_epi8::<5>(a, b),
+                    6 => _mm512_alignr_epi8::<6>(a, b),
+                    7 => _mm512_alignr_epi8::<7>(a, b),
+                    8 => _mm512_alignr_epi8::<8>(a, b),
+                    9 => _mm512_alignr_epi8::<9>(a, b),
+                    10 => _mm512_alignr_epi8::<10>(a, b),
+                    11 => _mm512_alignr_epi8::<11>(a, b),
+                    12 => _mm512_alignr_epi8::<12>(a, b),
+                    13 => _mm512_alignr_epi8::<13>(a, b),
+                    14 => _mm512_alignr_epi8::<14>(a, b),
+                    15 => _mm512_alignr_epi8::<15>(a, b),
+                    16 => _mm512_alignr_epi8::<16>(a, b),
+                    17 => _mm512_alignr_epi8::<17>(a, b),
+                    18 => _mm512_alignr_epi8::<18>(a, b),
+                    19 => _mm512_alignr_epi8::<19>(a, b),
+                    20 => _mm512_alignr_epi8::<20>(a, b),
+                    21 => _mm512_alignr_epi8::<21>(a, b),
+                    22 => _mm512_alignr_epi8::<22>(a, b),
+                    23 => _mm512_alignr_epi8::<23>(a, b),
+                    24 => _mm512_alignr_epi8::<24>(a, b),
+                    25 => _mm512_alignr_epi8::<25>(a, b),
+                    26 => _mm512_alignr_epi8::<26>(a, b),
+                    27 => _mm512_alignr_epi8::<27>(a, b),
+                    28 => _mm512_alignr_epi8::<28>(a, b),
+                    29 => _mm512_alignr_epi8::<29>(a, b),
+                    30 => _mm512_alignr_epi8::<30>(a, b),
+                    31 => _mm512_alignr_epi8::<31>(a, b),
+                    32 => _mm512_alignr_epi8::<32>(a, b),
+                    33 => _mm512_alignr_epi8::<33>(a, b),
+                    34 => _mm512_alignr_epi8::<34>(a, b),
+                    35 => _mm512_alignr_epi8::<35>(a, b),
+                    36 => _mm512_alignr_epi8::<36>(a, b),
+                    37 => _mm512_alignr_epi8::<37>(a, b),
+                    38 => _mm512_alignr_epi8::<38>(a, b),
+                    39 => _mm512_alignr_epi8::<39>(a, b),
+                    40 => _mm512_alignr_epi8::<40>(a, b),
+                    41 => _mm512_alignr_epi8::<41>(a, b),
+                    42 => _mm512_alignr_epi8::<42>(a, b),
+                    43 => _mm512_alignr_epi8::<43>(a, b),
+                    44 => _mm512_alignr_epi8::<44>(a, b),
+                    45 => _mm512_alignr_epi8::<45>(a, b),
+                    46 => _mm512_alignr_epi8::<46>(a, b),
+                    47 => _mm512_alignr_epi8::<47>(a, b),
+                    48 => _mm512_alignr_epi8::<48>(a, b),
+                    49 => _mm512_alignr_epi8::<49>(a, b),
+                    50 => _mm512_alignr_epi8::<50>(a, b),
+                    51 => _mm512_alignr_epi8::<51>(a, b),
+                    52 => _mm512_alignr_epi8::<52>(a, b),
+                    53 => _mm512_alignr_epi8::<53>(a, b),
+                    54 => _mm512_alignr_epi8::<54>(a, b),
+                    55 => _mm512_alignr_epi8::<55>(a, b),
+                    56 => _mm512_alignr_epi8::<56>(a, b),
+                    57 => _mm512_alignr_epi8::<57>(a, b),
+                    58 => _mm512_alignr_epi8::<58>(a, b),
+                    59 => _mm512_alignr_epi8::<59>(a, b),
+                    60 => _mm512_alignr_epi8::<60>(a, b),
+                    61 => _mm512_alignr_epi8::<61>(a, b),
+                    62 => _mm512_alignr_epi8::<62>(a, b),
+                    63 => _mm512_alignr_epi8::<63>(a, b),
+                    64 => _mm512_alignr_epi8::<64>(a, b),
+                    _ => _mm512_setzero_si512(),
+                }
+            };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_alignl_epi8",
+        vec![ArgType::I512, ArgType::I512, ArgType::U32],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512bw()?;
+            if args.len() != 3 {
+                return Err("_mm512_alignl_epi8 requires 3 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let b = args[1].to_i512();
+            let imm = (args[2].to_u32() & 0xFF) as i32;
+            let res = unsafe {
+                match imm {
+                    0 => _mm512_alignr_epi8::<0>(b, a),
+                    1 => _mm512_alignr_epi8::<1>(b, a),
+                    2 => _mm512_alignr_epi8::<2>(b, a),
+                    3 => _mm512_alignr_epi8::<3>(b, a),
+                    4 => _mm512_alignr_epi8::<4>(b, a),
+                    5 => _mm512_alignr_epi8::<5>(b, a),
+                    6 => _mm512_alignr_epi8::<6>(b, a),
+                    7 => _mm512_alignr_epi8::<7>(b, a),
+                    8 => _mm512_alignr_epi8::<8>(b, a),
+                    9 => _mm512_alignr_epi8::<9>(b, a),
+                    10 => _mm512_alignr_epi8::<10>(b, a),
+                    11 => _mm512_alignr_epi8::<11>(b, a),
+                    12 => _mm512_alignr_epi8::<12>(b, a),
+                    13 => _mm512_alignr_epi8::<13>(b, a),
+                    14 => _mm512_alignr_epi8::<14>(b, a),
+                    15 => _mm512_alignr_epi8::<15>(b, a),
+                    16 => _mm512_alignr_epi8::<16>(b, a),
+                    17 => _mm512_alignr_epi8::<17>(b, a),
+                    18 => _mm512_alignr_epi8::<18>(b, a),
+                    19 => _mm512_alignr_epi8::<19>(b, a),
+                    20 => _mm512_alignr_epi8::<20>(b, a),
+                    21 => _mm512_alignr_epi8::<21>(b, a),
+                    22 => _mm512_alignr_epi8::<22>(b, a),
+                    23 => _mm512_alignr_epi8::<23>(b, a),
+                    24 => _mm512_alignr_epi8::<24>(b, a),
+                    25 => _mm512_alignr_epi8::<25>(b, a),
+                    26 => _mm512_alignr_epi8::<26>(b, a),
+                    27 => _mm512_alignr_epi8::<27>(b, a),
+                    28 => _mm512_alignr_epi8::<28>(b, a),
+                    29 => _mm512_alignr_epi8::<29>(b, a),
+                    30 => _mm512_alignr_epi8::<30>(b, a),
+                    31 => _mm512_alignr_epi8::<31>(b, a),
+                    32 => _mm512_alignr_epi8::<32>(b, a),
+                    33 => _mm512_alignr_epi8::<33>(b, a),
+                    34 => _mm512_alignr_epi8::<34>(b, a),
+                    35 => _mm512_alignr_epi8::<35>(b, a),
+                    36 => _mm512_alignr_epi8::<36>(b, a),
+                    37 => _mm512_alignr_epi8::<37>(b, a),
+                    38 => _mm512_alignr_epi8::<38>(b, a),
+                    39 => _mm512_alignr_epi8::<39>(b, a),
+                    40 => _mm512_alignr_epi8::<40>(b, a),
+                    41 => _mm512_alignr_epi8::<41>(b, a),
+                    42 => _mm512_alignr_epi8::<42>(b, a),
+                    43 => _mm512_alignr_epi8::<43>(b, a),
+                    44 => _mm512_alignr_epi8::<44>(b, a),
+                    45 => _mm512_alignr_epi8::<45>(b, a),
+                    46 => _mm512_alignr_epi8::<46>(b, a),
+                    47 => _mm512_alignr_epi8::<47>(b, a),
+                    48 => _mm512_alignr_epi8::<48>(b, a),
+                    49 => _mm512_alignr_epi8::<49>(b, a),
+                    50 => _mm512_alignr_epi8::<50>(b, a),
+                    51 => _mm512_alignr_epi8::<51>(b, a),
+                    52 => _mm512_alignr_epi8::<52>(b, a),
+                    53 => _mm512_alignr_epi8::<53>(b, a),
+                    54 => _mm512_alignr_epi8::<54>(b, a),
+                    55 => _mm512_alignr_epi8::<55>(b, a),
+                    56 => _mm512_alignr_epi8::<56>(b, a),
+                    57 => _mm512_alignr_epi8::<57>(b, a),
+                    58 => _mm512_alignr_epi8::<58>(b, a),
+                    59 => _mm512_alignr_epi8::<59>(b, a),
+                    60 => _mm512_alignr_epi8::<60>(b, a),
+                    61 => _mm512_alignr_epi8::<61>(b, a),
+                    62 => _mm512_alignr_epi8::<62>(b, a),
+                    63 => _mm512_alignr_epi8::<63>(b, a),
+                    64 => _mm512_alignr_epi8::<64>(b, a),
+                    _ => _mm512_setzero_si512(),
+                }
+            };
+            Ok(m512i_to_argument(res))
         },
     ));
 
@@ -1172,4 +1356,147 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             Ok(m512i_to_argument(res))
         },
     ));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn mm512_alignr_by_imm(a: __m512i, b: __m512i, imm: i32) -> __m512i {
+        unsafe {
+            match imm {
+                0 => _mm512_alignr_epi8::<0>(a, b),
+                1 => _mm512_alignr_epi8::<1>(a, b),
+                2 => _mm512_alignr_epi8::<2>(a, b),
+                3 => _mm512_alignr_epi8::<3>(a, b),
+                4 => _mm512_alignr_epi8::<4>(a, b),
+                5 => _mm512_alignr_epi8::<5>(a, b),
+                6 => _mm512_alignr_epi8::<6>(a, b),
+                7 => _mm512_alignr_epi8::<7>(a, b),
+                8 => _mm512_alignr_epi8::<8>(a, b),
+                9 => _mm512_alignr_epi8::<9>(a, b),
+                10 => _mm512_alignr_epi8::<10>(a, b),
+                11 => _mm512_alignr_epi8::<11>(a, b),
+                12 => _mm512_alignr_epi8::<12>(a, b),
+                13 => _mm512_alignr_epi8::<13>(a, b),
+                14 => _mm512_alignr_epi8::<14>(a, b),
+                15 => _mm512_alignr_epi8::<15>(a, b),
+                16 => _mm512_alignr_epi8::<16>(a, b),
+                17 => _mm512_alignr_epi8::<17>(a, b),
+                18 => _mm512_alignr_epi8::<18>(a, b),
+                19 => _mm512_alignr_epi8::<19>(a, b),
+                20 => _mm512_alignr_epi8::<20>(a, b),
+                21 => _mm512_alignr_epi8::<21>(a, b),
+                22 => _mm512_alignr_epi8::<22>(a, b),
+                23 => _mm512_alignr_epi8::<23>(a, b),
+                24 => _mm512_alignr_epi8::<24>(a, b),
+                25 => _mm512_alignr_epi8::<25>(a, b),
+                26 => _mm512_alignr_epi8::<26>(a, b),
+                27 => _mm512_alignr_epi8::<27>(a, b),
+                28 => _mm512_alignr_epi8::<28>(a, b),
+                29 => _mm512_alignr_epi8::<29>(a, b),
+                30 => _mm512_alignr_epi8::<30>(a, b),
+                31 => _mm512_alignr_epi8::<31>(a, b),
+                32 => _mm512_alignr_epi8::<32>(a, b),
+                33 => _mm512_alignr_epi8::<33>(a, b),
+                34 => _mm512_alignr_epi8::<34>(a, b),
+                35 => _mm512_alignr_epi8::<35>(a, b),
+                36 => _mm512_alignr_epi8::<36>(a, b),
+                37 => _mm512_alignr_epi8::<37>(a, b),
+                38 => _mm512_alignr_epi8::<38>(a, b),
+                39 => _mm512_alignr_epi8::<39>(a, b),
+                40 => _mm512_alignr_epi8::<40>(a, b),
+                41 => _mm512_alignr_epi8::<41>(a, b),
+                42 => _mm512_alignr_epi8::<42>(a, b),
+                43 => _mm512_alignr_epi8::<43>(a, b),
+                44 => _mm512_alignr_epi8::<44>(a, b),
+                45 => _mm512_alignr_epi8::<45>(a, b),
+                46 => _mm512_alignr_epi8::<46>(a, b),
+                47 => _mm512_alignr_epi8::<47>(a, b),
+                48 => _mm512_alignr_epi8::<48>(a, b),
+                49 => _mm512_alignr_epi8::<49>(a, b),
+                50 => _mm512_alignr_epi8::<50>(a, b),
+                51 => _mm512_alignr_epi8::<51>(a, b),
+                52 => _mm512_alignr_epi8::<52>(a, b),
+                53 => _mm512_alignr_epi8::<53>(a, b),
+                54 => _mm512_alignr_epi8::<54>(a, b),
+                55 => _mm512_alignr_epi8::<55>(a, b),
+                56 => _mm512_alignr_epi8::<56>(a, b),
+                57 => _mm512_alignr_epi8::<57>(a, b),
+                58 => _mm512_alignr_epi8::<58>(a, b),
+                59 => _mm512_alignr_epi8::<59>(a, b),
+                60 => _mm512_alignr_epi8::<60>(a, b),
+                61 => _mm512_alignr_epi8::<61>(a, b),
+                62 => _mm512_alignr_epi8::<62>(a, b),
+                63 => _mm512_alignr_epi8::<63>(a, b),
+                64 => _mm512_alignr_epi8::<64>(a, b),
+                _ => _mm512_setzero_si512(),
+            }
+        }
+    }
+
+    #[test]
+    fn alignr_i512_produces_expected_bytes() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512bw") {
+            return;
+        }
+        let mut a_bytes = [0u8; 64];
+        let mut b_bytes = [0u8; 64];
+        for i in 0..64 {
+            a_bytes[i] = 0x10 + i as u8;
+            b_bytes[i] = 0x80 + i as u8;
+        }
+
+        let a = unsafe { std::mem::transmute::<[u8; 64], __m512i>(a_bytes) };
+        let b = unsafe { std::mem::transmute::<[u8; 64], __m512i>(b_bytes) };
+
+        let res = mm512_alignr_by_imm(a, b, 12);
+        let bytes = m512i_to_bytes(res);
+        let expected: [u8; 64] = [
+            140, 141, 142, 143, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 156, 157, 158, 159,
+            32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 172, 173, 174, 175, 48, 49, 50, 51, 52,
+            53, 54, 55, 56, 57, 58, 59, 188, 189, 190, 191, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73,
+            74, 75,
+        ];
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn alignl_i512_produces_expected_bytes() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512bw") {
+            return;
+        }
+        let mut a_bytes = [0u8; 64];
+        let mut b_bytes = [0u8; 64];
+        for i in 0..64 {
+            a_bytes[i] = 0x10 + i as u8;
+            b_bytes[i] = 0x80 + i as u8;
+        }
+
+        let a = unsafe { std::mem::transmute::<[u8; 64], __m512i>(a_bytes) };
+        let b = unsafe { std::mem::transmute::<[u8; 64], __m512i>(b_bytes) };
+
+        let res = mm512_alignr_by_imm(b, a, 20);
+        let bytes = m512i_to_bytes(res);
+        let expected: [u8; 64] = [
+            132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 0, 0, 0, 0, 148, 149, 150,
+            151, 152, 153, 154, 155, 156, 157, 158, 159, 0, 0, 0, 0, 164, 165, 166, 167, 168, 169,
+            170, 171, 172, 173, 174, 175, 0, 0, 0, 0, 180, 181, 182, 183, 184, 185, 186, 187, 188,
+            189, 190, 191, 0, 0, 0, 0,
+        ];
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn align_i512_zeroes_when_shift_exceeds_length() {
+        if !is_x86_feature_detected!("avx512f") || !is_x86_feature_detected!("avx512bw") {
+            return;
+        }
+        let a = unsafe { std::mem::transmute::<[u8; 64], __m512i>([1u8; 64]) };
+        let b = unsafe { std::mem::transmute::<[u8; 64], __m512i>([2u8; 64]) };
+
+        let res = mm512_alignr_by_imm(a, b, 200);
+        let bytes = m512i_to_bytes(res);
+        assert!(bytes.iter().all(|&byte| byte == 0));
+    }
 }
