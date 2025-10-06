@@ -407,6 +407,38 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
     ));
 
     registry.register_instruction(Instruction::new(
+        "_mm512_sll_epi32",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_sll_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_sll_epi32(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "__mm512_sll_epi32",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("__mm512_sll_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_sll_epi32(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
         "_mm512_slli_epi64",
         vec![ArgType::I512, ArgType::U32],
         ArgType::I512,
@@ -420,6 +452,40 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             let imm = (args[1].to_u32() & 0x3f) as i64;
             let counts = unsafe { _mm512_set1_epi64(imm) };
             let res = unsafe { _mm512_sllv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_sll_epi64",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_sll_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_sll_epi64(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "__mm512_sll_epi64",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("__mm512_sll_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_sll_epi64(a, count) };
             Ok(m512i_to_argument(res))
         },
     ));
@@ -442,6 +508,38 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
     ));
 
     registry.register_instruction(Instruction::new(
+        "_mm512_srl_epi32",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("_mm512_srl_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_srl_epi32(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "__mm512_srl_epi32",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            if args.len() != 2 {
+                return Err("__mm512_srl_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_srl_epi32(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
         "_mm512_srli_epi64",
         vec![ArgType::I512, ArgType::U32],
         ArgType::I512,
@@ -455,6 +553,40 @@ pub fn register_avx512_instructions(registry: &mut FunctionRegistry) {
             let imm = (args[1].to_u32() & 0x3f) as i64;
             let counts = unsafe { _mm512_set1_epi64(imm) };
             let res = unsafe { _mm512_srlv_epi64(a, counts) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "_mm512_srl_epi64",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("_mm512_srl_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_srl_epi64(a, count) };
+            Ok(m512i_to_argument(res))
+        },
+    ));
+
+    registry.register_instruction(Instruction::new(
+        "__mm512_srl_epi64",
+        vec![ArgType::I512, ArgType::I128],
+        ArgType::I512,
+        |_, args| {
+            require_avx512f()?;
+            require_avx512dq()?;
+            if args.len() != 2 {
+                return Err("__mm512_srl_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i512();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm512_srl_epi64(a, count) };
             Ok(m512i_to_argument(res))
         },
     ));

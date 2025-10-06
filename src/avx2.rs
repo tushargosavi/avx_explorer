@@ -635,6 +635,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
         },
     ));
     registry.register_instruction(Instruction::new(
+        "__mm256_sll_epi16",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_sll_epi16 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_sll_epi16(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
         "_mm256_sll_epi32",
         vec![ArgType::I256, ArgType::I128],
         ArgType::I256,
@@ -642,6 +657,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             require_avx2()?;
             if args.len() != 2 {
                 return Err("_mm256_sll_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_sll_epi32(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "__mm256_sll_epi32",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_sll_epi32 requires 2 arguments".to_string());
             }
             let a = args[0].to_i256();
             let count = args[1].to_i128();
@@ -665,6 +695,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
         },
     ));
     registry.register_instruction(Instruction::new(
+        "__mm256_sll_epi64",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_sll_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_sll_epi64(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
         "_mm256_srl_epi16",
         vec![ArgType::I256, ArgType::I128],
         ArgType::I256,
@@ -672,6 +717,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             require_avx2()?;
             if args.len() != 2 {
                 return Err("_mm256_srl_epi16 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_srl_epi16(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "__mm256_srl_epi16",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_srl_epi16 requires 2 arguments".to_string());
             }
             let a = args[0].to_i256();
             let count = args[1].to_i128();
@@ -695,6 +755,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
         },
     ));
     registry.register_instruction(Instruction::new(
+        "__mm256_srl_epi32",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_srl_epi32 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_srl_epi32(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
         "_mm256_srl_epi64",
         vec![ArgType::I256, ArgType::I128],
         ArgType::I256,
@@ -702,6 +777,21 @@ pub fn register_avx2_instructions(registry: &mut FunctionRegistry) {
             require_avx2()?;
             if args.len() != 2 {
                 return Err("_mm256_srl_epi64 requires 2 arguments".to_string());
+            }
+            let a = args[0].to_i256();
+            let count = args[1].to_i128();
+            let res = unsafe { _mm256_srl_epi64(a, count) };
+            Ok(m256i_to_argument(res))
+        },
+    ));
+    registry.register_instruction(Instruction::new(
+        "__mm256_srl_epi64",
+        vec![ArgType::I256, ArgType::I128],
+        ArgType::I256,
+        |_, args| {
+            require_avx2()?;
+            if args.len() != 2 {
+                return Err("__mm256_srl_epi64 requires 2 arguments".to_string());
             }
             let a = args[0].to_i256();
             let count = args[1].to_i128();
